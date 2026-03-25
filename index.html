@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<!-- Created for Genesys Cloud Copilot conversation suggestion monitoring -->
+<html>
+  <head>
+    <meta name="robots" content="noindex" />
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title>Genesys Copilot Conversation Monitor</title>)
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <link
+      no-cors
+      href="https://cdn.jsdelivr.net/npm/genesys-spark-components@latest/dist/genesys-webcomponents/genesys-webcomponents.min.css"
+      rel="stylesheet"
+    />
+    <script
+      no-cors
+      type="module"
+      src="https://cdn.jsdelivr.net/npm/genesys-spark-components@latest/dist/genesys-webcomponents/genesys-webcomponents.esm.min.js"
+    ></script>
+    <script src="https://sdk-cdn.mypurecloud.com/javascript/latest/purecloud-platform-client-v2.min.js"></script>
+
+    <style>
+      :root {
+        --bg: #f7f9fc;
+        --card: #ffffff;
+        --text: #24364b;
+        --muted: #6b778c;
+        --border: #dfe7f3;
+        --shadow: 0 10px 30px rgba(36, 54, 75, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      .page {
+        max-width: 1600px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      .hero {
+        background: linear-gradient(135deg, #20344c, #38598b);
+        color: white;
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow: var(--shadow);
+        margin-bottom: 20px;
+      }
+
+      .hero h1 {
+        margin: 0 0 8px 0;
+        font-size: 28px;
+      }
+
+      .hero p {
+        margin: 0;
+        opacity: 0.95;
+      }
+
+      .toolbar,
+      .status-grid,
+      .conversations-grid,
+      .events-grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .toolbar {
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        margin-bottom: 20px;
+      }
+
+      .status-grid {
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        margin-bottom: 20px;
+      }
+
+      .conversations-grid {
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        margin-bottom: 20px;
+      }
+
+      .events-grid {
+        grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        box-shadow: var(--shadow);
+        padding: 18px;
+      }
+
+      .card h2,
+      .card h3 {
+        margin-top: 0;
+      }
+
+      .metric {
+        font-size: 32px;
+        font-weight: 700;
+        margin: 8px 0;
+      }
+
+      .label {
+        font-size: 12px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .value,
+      .mono {
+        font-family: Consolas, Monaco, monospace;
+        word-break: break-word;
+      }
+
+      .mono {
+        font-size: 12px;
+      }
+
+      .pill-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .pill {
+        background: #eef3fb;
+        border: 1px solid #d8e4f5;
+        color: #29456b;
+        border-radius: 999px;
+        padding: 6px 10px;
+        font-size: 12px;
+      }
+
+      .conversation-card {
+        border-left: 5px solid #5b8def;
+      }
+
+      .event-card {
+        border-left: 5px solid #7f56d9;
+      }
+
+      .event-card.intent {
+        border-left-color: #0e9384;
+      }
+
+      .event-card.article {
+        border-left-color: #2970ff;
+      }
+
+      .event-card.search {
+        border-left-color: #f79009;
+      }
+
+      .event-card.response {
+        border-left-color: #7a5af8;
+      }
+
+      .event-card.script {
+        border-left-color: #12b76a;
+      }
+
+      .event-card.thirdpartyaction {
+        border-left-color: #ef4444;
+      }
+
+      pre {
+        background: #0f172a;
+        color: #dbe7ff;
+        padding: 14px;
+        border-radius: 12px;
+        overflow: auto;
+        font-size: 12px;
+        max-height: 340px;
+      }
+
+      .row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        margin: 8px 0;
+      }
+
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      .empty-state {
+        text-align: center;
+        padding: 28px;
+        color: var(--muted);
+        background: white;
+        border: 1px dashed var(--border);
+        border-radius: 16px;
+      }
+    </style>
+  </head>
+  <body onload="start()">
+    <div class="page">
+      <section class="hero">
+        <h1>Genesys Copilot Conversation Monitor</h1>
+        <p>
+          Subscribes to the current user's conversations, then dynamically subscribes to Copilot suggestion topics for each
+          active conversation and renders each event payload in a visual container.
+        </p>
+      </section>
+
+      <section class="toolbar">
+        <div class="card stack">
+          <h3>Connection</h3>
+          <div class="controls">
+            <gux-button accent="primary" onclick="start(true)">Reconnect</gux-button>
+            <gux-button accent="secondary" onclick="clearEvents()">Clear Events</gux-button>
+          </div>
+          <div class="row"><span class="label">Region</span><span id="regionValue" class="value"></span></div>
+          <div class="row"><span class="label">Client ID</span><span id="clientValue" class="value"></span></div>
+          <div class="row"><span class="label">Redirect URL</span><span id="redirectValue" class="value"></span></div>
+        </div>
+
+        <div class="card stack">
+          <h3>Log</h3>
+          <div id="logArea" class="mono muted">Waiting to start...</div>
+        </div>
+      </section>
+
+      <section class="status-grid">
+        <div class="card">
+          <div class="label">User ID</div>
+          <div id="userIdMetric" class="metric">-</div>
+        </div>
+        <div class="card">
+          <div class="label">Notification Channel</div>
+          <div id="channelMetric" class="metric">-</div>
+        </div>
+        <div class="card">
+          <div class="label">Tracked Conversations</div>
+          <div id="conversationCountMetric" class="metric">0</div>
+        </div>
+        <div class="card">
+          <div class="label">Captured Events</div>
+          <div id="eventCountMetric" class="metric">0</div>
+        </div>
+      </section>
+
+      <section>
+        <div class="card">
+          <h2>Tracked Conversations</h2>
+          <div id="conversationsContainer" class="conversations-grid"></div>
+        </div>
+      </section>
+
+      <section style="margin-top: 20px;">
+        <div class="card">
+          <h2>Suggestion Events</h2>
+          <div id="eventsContainer" class="events-grid"></div>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      'use strict'
+
+      const url = new URL(document.location.href)
+      let gc_region = url.searchParams.get('gc_region')
+      let gc_clientId = url.searchParams.get('gc_clientId')
+      let gc_redirectUrl = url.searchParams.get('gc_redirectUrl')
+      let gc_conversationId = url.searchParams.get('gc_conversationId')
+
+      gc_region ? sessionStorage.setItem('gc_region', gc_region) : (gc_region = sessionStorage.getItem('gc_region'))
+      gc_clientId ? sessionStorage.setItem('gc_clientId', gc_clientId) : (gc_clientId = sessionStorage.getItem('gc_clientId'))
+      gc_redirectUrl ? sessionStorage.setItem('gc_redirectUrl', gc_redirectUrl) : (gc_redirectUrl = sessionStorage.getItem('gc_redirectUrl'))
+      gc_conversationId
+        ? sessionStorage.setItem('gc_conversationId', gc_conversationId)
+        : (gc_conversationId = sessionStorage.getItem('gc_conversationId'))
+
+      const platformClient = require('platformClient')
+      const client = platformClient.ApiClient.instance
+      const uapi = new platformClient.UsersApi()
+      const napi = new platformClient.NotificationsApi()
+
+      let userId = null
+      let channelId = null
+      let webSocket = null
+      let capturedEventCount = 0
+      const trackedConversationIds = new Set()
+      const subscribedTopics = new Set()
+      const suggestionTopicSuffixes = [
+        'suggestions.intent',
+        'suggestions.knowledge.article',
+        'suggestions.knowledge.search',
+        'suggestions.response',
+        'suggestions.script',
+        'suggestions.thirdpartyaction'
+      ]
+
+      function setText(id, value) {
+        document.getElementById(id).textContent = value || '-'
+      }
+
+      function log(message) {
+        const area = document.getElementById('logArea')
+        const timestamp = new Date().toLocaleTimeString()
+        area.innerHTML = `<div>[${timestamp}] ${escapeHtml(message)}</div>` + area.innerHTML
+      }
+
+      function escapeHtml(value) {
+        return String(value ?? '')
+          .replaceAll('&', '&amp;')
+          .replaceAll('<', '&lt;')
+          .replaceAll('>', '&gt;')
+          .replaceAll('"', '&quot;')
+          .replaceAll("'", '&#39;')
+      }
+
+      function updateMetrics() {
+        setText('userIdMetric', userId || '-')
+        setText('channelMetric', channelId || '-')
+        setText('conversationCountMetric', String(trackedConversationIds.size))
+        setText('eventCountMetric', String(capturedEventCount))
+      }
+
+      function clearEvents() {
+        capturedEventCount = 0
+        document.getElementById('eventsContainer').innerHTML = ''
+        updateMetrics()
+        renderEmptyEvents()
+        log('Cleared rendered suggestion events')
+      }
+
+      function renderEmptyConversations() {
+        const container = document.getElementById('conversationsContainer')
+        if (!container.children.length) {
+          container.innerHTML = '<div class="empty-state">No conversations tracked yet.</div>'
+        }
+      }
+
+      function renderEmptyEvents() {
+        const container = document.getElementById('eventsContainer')
+        if (!container.children.length) {
+          container.innerHTML = '<div class="empty-state">No Copilot suggestion events captured yet.</div>'
+        }
+      }
+
+      function renderConversationCard(conversationId, sourceTopic) {
+        const container = document.getElementById('conversationsContainer')
+        const empty = container.querySelector('.empty-state')
+        if (empty) empty.remove()
+
+        const existing = document.getElementById(`conv-${conversationId}`)
+        if (existing) {
+          const lastSeen = existing.querySelector('.last-seen')
+          if (lastSeen) lastSeen.textContent = new Date().toLocaleString()
+          return
+        }
+
+        const card = document.createElement('div')
+        card.className = 'card conversation-card'
+        card.id = `conv-${conversationId}`
+        card.innerHTML = `
+          <div class="label">Conversation ID</div>
+          <div class="value mono">${escapeHtml(conversationId)}</div>
+          <div class="row"><span class="label">Detected From</span><span class="mono">${escapeHtml(sourceTopic)}</span></div>
+          <div class="row"><span class="label">Last Seen</span><span class="mono last-seen">${escapeHtml(new Date().toLocaleString())}</span></div>
+          <div class="pill-row">
+            ${suggestionTopicSuffixes.map((suffix) => `<span class="pill">${escapeHtml(suffix)}</span>`).join('')}
+          </div>
+        `
+        container.prepend(card)
+      }
+
+      function getEventType(topicName) {
+        if (topicName.includes('suggestions.intent')) return 'intent'
+        if (topicName.includes('suggestions.knowledge.article')) return 'article'
+        if (topicName.includes('suggestions.knowledge.search')) return 'search'
+        if (topicName.includes('suggestions.response')) return 'response'
+        if (topicName.includes('suggestions.script')) return 'script'
+        if (topicName.includes('suggestions.thirdpartyaction')) return 'thirdpartyaction'
+        return 'generic'
+      }
+
+      function extractBestPayloadId(eventBody) {
+        return (
+          eventBody?.id ||
+          eventBody?.eventId ||
+          eventBody?.suggestionId ||
+          eventBody?.articleId ||
+          eventBody?.searchId ||
+          eventBody?.responseId ||
+          eventBody?.scriptId ||
+          eventBody?.actionId ||
+          eventBody?.payload?.id ||
+          'No explicit id found in payload'
+        )
+      }
+
+      function renderSuggestionEvent(details) {
+        const container = document.getElementById('eventsContainer')
+        const empty = container.querySelector('.empty-state')
+        if (empty) empty.remove()
+
+        const eventType = getEventType(details.topicName)
+        const conversationId = extractConversationIdFromTopic(details.topicName)
+        const payloadId = extractBestPayloadId(details.eventBody)
+
+        const card = document.createElement('div')
+        card.className = `card event-card ${eventType}`
+        card.innerHTML = `
+          <div class="label">${escapeHtml(eventType)}</div>
+          <h3>${escapeHtml(details.topicName)}</h3>
+          <div class="row"><span class="label">Conversation</span><span class="mono">${escapeHtml(conversationId || 'Unknown')}</span></div>
+          <div class="row"><span class="label">Payload ID</span><span class="mono">${escapeHtml(payloadId)}</span></div>
+          <div class="row"><span class="label">Received</span><span class="mono">${escapeHtml(new Date().toLocaleString())}</span></div>
+          <pre>${escapeHtml(JSON.stringify(details.eventBody, null, 2))}</pre>
+        `
+
+        container.prepend(card)
+        capturedEventCount += 1
+        updateMetrics()
+      }
+
+      function extractConversationIdFromTopic(topicName) {
+        const parts = topicName.split('.')
+        const index = parts.findIndex((part) => part === 'conversations')
+        if (index > -1 && parts[index + 1]) return parts[index + 1]
+        return null
+      }
+
+      async function ensureNotificationChannel() {
+        let channel = null
+        const storedChannelId = sessionStorage.getItem('gc_channelid')
+
+        if (storedChannelId) {
+          try {
+            channel = await napi.getNotificationsChannel(storedChannelId)
+            log(`Reusing notification channel ${storedChannelId}`)
+          } catch (err) {
+            log(`Stored channel ${storedChannelId} was not available, creating a new channel`)
+            sessionStorage.removeItem('gc_channelid')
+          }
+        }
+
+        if (!channel) {
+          channel = await napi.postNotificationsChannels()
+          sessionStorage.setItem('gc_channelid', channel.id)
+          log(`Created notification channel ${channel.id}`)
+        }
+
+        channelId = channel.id
+        updateMetrics()
+        return channel
+      }
+
+      async function subscribeTopics(topics) {
+        const uniqueTopics = topics.filter((topic) => topic && !subscribedTopics.has(topic))
+        if (!uniqueTopics.length) return
+
+        await napi.postNotificationsChannelSubscriptions(
+          channelId,
+          uniqueTopics.map((topic) => ({ id: topic }))
+        )
+
+        uniqueTopics.forEach((topic) => subscribedTopics.add(topic))
+        log(`Subscribed to ${uniqueTopics.length} topic(s)`)
+      }
+
+      async function subscribeToUserConversations() {
+        const topic = `v2.users.${userId}.conversations`
+        await subscribeTopics([topic])
+        log(`Listening for user conversations on ${topic}`)
+      }
+
+      async function subscribeToConversationSuggestions(conversationId) {
+        const topics = suggestionTopicSuffixes.map((suffix) => `v2.conversations.${conversationId}.${suffix}`)
+        await subscribeTopics(topics)
+        trackedConversationIds.add(conversationId)
+        renderConversationCard(conversationId, 'user conversation notification')
+        updateMetrics()
+        log(`Tracking conversation ${conversationId}`)
+      }
+
+      function extractConversationIdsFromConversationEvent(details) {
+        const ids = new Set()
+
+        const addIfValid = (value) => {
+          if (typeof value === 'string' && value.length > 10) ids.add(value)
+        }
+
+        addIfValid(details?.eventBody?.id)
+        addIfValid(details?.eventBody?.conversationId)
+
+        if (Array.isArray(details?.eventBody?.participants)) {
+          details.eventBody.participants.forEach((participant) => {
+            addIfValid(participant?.conversationId)
+            if (Array.isArray(participant?.sessions)) {
+              participant.sessions.forEach((session) => addIfValid(session?.conversationId))
+            }
+          })
+        }
+
+        if (gc_conversationId) addIfValid(gc_conversationId)
+
+        return Array.from(ids)
+      }
+
+      async function handleNotification(event) {
+        const details = JSON.parse(event.data)
+
+        if (details?.eventBody?.message === 'WebSocket Heartbeat') {
+          log('Heartbeat received')
+          return
+        }
+
+        if (!details?.topicName) {
+          log('Received message without topicName')
+          return
+        }
+
+        console.log('Notification event', details)
+
+        if (details.topicName.startsWith(`v2.users.${userId}.conversations`)) {
+          const conversationIds = extractConversationIdsFromConversationEvent(details)
+          for (const conversationId of conversationIds) {
+            if (!trackedConversationIds.has(conversationId)) {
+              await subscribeToConversationSuggestions(conversationId)
+            } else {
+              renderConversationCard(conversationId, details.topicName)
+            }
+          }
+          return
+        }
+
+        if (details.topicName.includes('.suggestions.')) {
+          const conversationId = extractConversationIdFromTopic(details.topicName)
+          if (conversationId && !trackedConversationIds.has(conversationId)) {
+            trackedConversationIds.add(conversationId)
+            renderConversationCard(conversationId, details.topicName)
+            updateMetrics()
+          }
+          renderSuggestionEvent(details)
+        }
+      }
+
+      async function connectWebSocket(connectUri) {
+        if (webSocket) {
+          try {
+            webSocket.close()
+          } catch (err) {
+            console.warn('Error closing previous websocket', err)
+          }
+        }
+
+        webSocket = new WebSocket(connectUri)
+        webSocket.onopen = () => log('WebSocket connected')
+        webSocket.onmessage = (event) => {
+          handleNotification(event).catch((err) => {
+            console.error('Notification handling error', err)
+            log(`Notification handling error: ${err.message || err}`)
+          })
+        }
+        webSocket.onerror = (err) => {
+          console.error('WebSocket error', err)
+          log('WebSocket error occurred')
+        }
+        webSocket.onclose = () => log('WebSocket closed')
+      }
+
+      async function start(forceReconnect = false) {
+        try {
+          document.getElementById('regionValue').textContent = gc_region || '-'
+          document.getElementById('clientValue').textContent = gc_clientId || '-'
+          document.getElementById('redirectValue').textContent = gc_redirectUrl || '-'
+
+          renderEmptyConversations()
+          renderEmptyEvents()
+
+          if (!gc_region || !gc_clientId || !gc_redirectUrl) {
+            throw new Error('Missing gc_region, gc_clientId, or gc_redirectUrl in the URL or session storage')
+          }
+
+          client.setEnvironment(gc_region)
+          client.setPersistSettings(true, '_gc_copilot_monitor_')
+
+          log('Logging in to Genesys Cloud with PKCE')
+          await client.loginPKCEGrant(gc_clientId, gc_redirectUrl, {})
+
+          const user = await uapi.getUsersMe({})
+          userId = user.id
+          updateMetrics()
+          log(`Authenticated as ${user.name || user.id}`)
+
+          if (forceReconnect) {
+            sessionStorage.removeItem('gc_channelid')
+            subscribedTopics.clear()
+            trackedConversationIds.clear()
+            document.getElementById('conversationsContainer').innerHTML = ''
+            renderEmptyConversations()
+          }
+
+          const channel = await ensureNotificationChannel()
+          await connectWebSocket(channel.connectUri)
+          await subscribeToUserConversations()
+
+          if (gc_conversationId) {
+            await subscribeToConversationSuggestions(gc_conversationId)
+            log(`Preloaded conversation from querystring: ${gc_conversationId}`)
+          }
+        } catch (err) {
+          console.error('Startup error', err)
+          log(`Startup error: ${err.message || err}`)
+        }
+      }
+    </script>
+  </body>
+</html>
