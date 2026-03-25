@@ -71,9 +71,7 @@
       }
 
       .toolbar,
-      .status-grid,
-      .conversations-grid,
-      .events-grid {
+      .status-grid {
         display: grid;
         gap: 10px;
       }
@@ -88,13 +86,15 @@
         margin-bottom: 12px;
       }
 
-      .conversations-grid {
-        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-        margin-bottom: 12px;
+      .conversations-grid,
+      .events-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
       }
 
-      .events-grid {
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      .conversations-grid {
+        margin-bottom: 12px;
       }
 
       .card {
@@ -103,6 +103,11 @@
         border-radius: 12px;
         box-shadow: var(--shadow);
         padding: 12px;
+      }
+
+      .conversation-card,
+      .event-card {
+        width: 100%;
       }
 
       .card h2,
@@ -233,10 +238,6 @@
         color: var(--muted);
       }
 
-      .hidden {
-        display: none;
-      }
-
       .empty-state {
         text-align: center;
         padding: 18px;
@@ -273,9 +274,7 @@
           padding: 8px;
         }
 
-        .status-grid,
-        .conversations-grid,
-        .events-grid {
+        .status-grid {
           grid-template-columns: 1fr;
         }
 
@@ -291,7 +290,7 @@
         <h1>Genesys Copilot Conversation Monitor</h1>
         <p>
           Subscribes to the current user's conversations, then dynamically subscribes to Copilot suggestion topics for each
-          active conversation and renders each event payload in a visual container.
+          active conversation and renders each event payload in stacked containers from newest to oldest.
         </p>
       </section>
 
@@ -440,6 +439,11 @@
         if (existing) {
           const lastSeen = existing.querySelector('.last-seen')
           if (lastSeen) lastSeen.textContent = new Date().toLocaleString()
+
+          const sourceNode = existing.querySelector('.detected-from')
+          if (sourceNode) sourceNode.textContent = sourceTopic
+
+          container.prepend(existing)
           return
         }
 
@@ -449,7 +453,7 @@
         card.innerHTML = `
           <div class="label">Conversation ID</div>
           <div class="value mono">${escapeHtml(conversationId)}</div>
-          <div class="row"><span class="label">Detected From</span><span class="mono">${escapeHtml(sourceTopic)}</span></div>
+          <div class="row"><span class="label">Detected From</span><span class="mono detected-from">${escapeHtml(sourceTopic)}</span></div>
           <div class="row"><span class="label">Last Seen</span><span class="mono last-seen">${escapeHtml(new Date().toLocaleString())}</span></div>
           <div class="pill-row">
             ${suggestionTopicSuffixes.map((suffix) => `<span class="pill">${escapeHtml(suffix)}</span>`).join('')}
@@ -625,7 +629,10 @@
             trackedConversationIds.add(conversationId)
             renderConversationCard(conversationId, details.topicName)
             updateMetrics()
+          } else if (conversationId) {
+            renderConversationCard(conversationId, details.topicName)
           }
+
           renderSuggestionEvent(details)
         }
       }
@@ -683,7 +690,11 @@
             subscribedTopics.clear()
             trackedConversationIds.clear()
             document.getElementById('conversationsContainer').innerHTML = ''
+            document.getElementById('eventsContainer').innerHTML = ''
+            capturedEventCount = 0
+            updateMetrics()
             renderEmptyConversations()
+            renderEmptyEvents()
           }
 
           const channel = await ensureNotificationChannel()
