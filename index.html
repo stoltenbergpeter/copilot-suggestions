@@ -201,6 +201,10 @@
         border-left-color: #ef4444;
       }
 
+      .event-card.summary {
+        border-left-color: #344054;
+      }
+
       pre {
         background: #0f172a;
         color: #dbe7ff;
@@ -289,8 +293,8 @@
       <section class="hero">
         <h1>Genesys Copilot Conversation Monitor</h1>
         <p>
-          Subscribes to the current user's conversations, then dynamically subscribes to Copilot suggestion topics for each
-          active conversation and renders each event payload in stacked containers from newest to oldest.
+          Subscribes to the current user's conversations and summaries, then dynamically subscribes to Copilot suggestion topics
+          for each active conversation and renders each event payload in stacked containers from newest to oldest.
         </p>
       </section>
 
@@ -373,14 +377,14 @@
       let capturedEventCount = 0
       const trackedConversationIds = new Set()
       const subscribedTopics = new Set()
+
       const suggestionTopicSuffixes = [
         'suggestions.intent',
         'suggestions.knowledge.article',
         'suggestions.knowledge.search',
         'suggestions.response',
         'suggestions.script',
-        'suggestions.thirdpartyaction',
-        'conversations.summaries'
+        'suggestions.thirdpartyaction'
       ]
 
       function setText(id, value) {
@@ -427,7 +431,7 @@
       function renderEmptyEvents() {
         const container = document.getElementById('eventsContainer')
         if (!container.children.length) {
-          container.innerHTML = '<div class="empty-state">No Copilot suggestion events captured yet.</div>'
+          container.innerHTML = '<div class="empty-state">No events captured yet.</div>'
         }
       }
 
@@ -436,7 +440,9 @@
         const empty = container.querySelector('.empty-state')
         if (empty) empty.remove()
 
-        const existing = document.getElementById(`conv-${conversationId}`)
+        const safeId = `conv-${conversationId.replace(/[^a-zA-Z0-9_-]/g, '_')}`
+        const existing = document.getElementById(safeId)
+
         if (existing) {
           const lastSeen = existing.querySelector('.last-seen')
           if (lastSeen) lastSeen.textContent = new Date().toLocaleString()
@@ -450,7 +456,7 @@
 
         const card = document.createElement('div')
         card.className = 'card conversation-card'
-        card.id = `conv-${conversationId}`
+        card.id = safeId
         card.innerHTML = `
           <div class="label">Conversation ID</div>
           <div class="value mono">${escapeHtml(conversationId)}</div>
@@ -470,32 +476,38 @@
         if (topicName.includes('suggestions.response')) return 'response'
         if (topicName.includes('suggestions.script')) return 'script'
         if (topicName.includes('suggestions.thirdpartyaction')) return 'thirdpartyaction'
+        if (topicName.includes('conversations.summaries')) return 'summary'
         return 'generic'
       }
 
-function extractBestPayloadId(eventBody) {
-  return (
-    eventBody?.id ||
-    eventBody?.conversationId ||
-    eventBody?.eventId ||
-    eventBody?.suggestionId ||
-    eventBody?.articleId ||
-    eventBody?.searchId ||
-    eventBody?.responseId ||
-    eventBody?.scriptId ||
-    eventBody?.actionId ||
-    eventBody?.payload?.id ||
-    'No explicit id found in payload'
-  )
-}
+      function extractBestPayloadId(eventBody) {
+        return (
+          eventBody?.id ||
+          eventBody?.conversationId ||
+          eventBody?.eventId ||
+          eventBody?.suggestionId ||
+          eventBody?.articleId ||
+          eventBody?.searchId ||
+          eventBody?.responseId ||
+          eventBody?.scriptId ||
+          eventBody?.actionId ||
+          eventBody?.payload?.id ||
+          'No explicit id found in payload'
+        )
+      }
 
-      function renderSuggestionEvent(details) {
+      function renderEvent(details) {
         const container = document.getElementById('eventsContainer')
         const empty = container.querySelector('.empty-state')
         if (empty) empty.remove()
 
         const eventType = getEventType(details.topicName)
-        const conversationId = extractConversationIdFromTopic(details.topicName)
+        const conversationId =
+          extractConversationIdFromTopic(details.topicName) ||
+          details?.eventBody?.conversationId ||
+          details?.eventBody?.id ||
+          'Unknown'
+
         const payloadId = extractBestPayloadId(details.eventBody)
 
         const card = document.createElement('div')
@@ -503,7 +515,7 @@ function extractBestPayloadId(eventBody) {
         card.innerHTML = `
           <div class="label">${escapeHtml(eventType)}</div>
           <h3>${escapeHtml(details.topicName)}</h3>
-          <div class="row"><span class="label">Conversation</span><span class="mono">${escapeHtml(conversationId || 'Unknown')}</span></div>
+          <div class="row"><span class="label">Conversation</span><span class="mono">${escapeHtml(conversationId)}</span></div>
           <div class="row"><span class="label">Payload ID</span><span class="mono">${escapeHtml(payloadId)}</span></div>
           <div class="row"><span class="label">Received</span><span class="mono">${escapeHtml(new Date().toLocaleString())}</span></div>
           <pre>${escapeHtml(JSON.stringify(details.eventBody, null, 2))}</pre>
@@ -559,14 +571,14 @@ function extractBestPayloadId(eventBody) {
         log(`Subscribed to ${uniqueTopics.length} topic(s)`)
       }
 
-async function subscribeToUserConversations() {
-  const topics = [
-    `v2.users.${userId}.conversations`,
-    `v2.users.${userId}.conversations.summaries`
-  ]
-  await subscribeTopics(topics)
-  log(`Listening for user topics: ${topics.join(', ')}`)
-}
+      async function subscribeToUserConversations() {
+        const topics = [
+          `v2.users.${userId}.conversations`,
+          `v2.users.${userId}.conversations.summaries`
+        ]
+        await subscribeTopics(topics)
+        log(`Listening for user topics: ${topics.join(', ')}`)
+      }
 
       async function subscribeToConversationSuggestions(conversationId) {
         const topics = suggestionTopicSuffixes.map((suffix) => `v2.conversations.${conversationId}.${suffix}`)
@@ -601,54 +613,51 @@ async function subscribeToUserConversations() {
         return Array.from(ids)
       }
 
-   async function handleNotification(event) {
-  const details = JSON.parse(event.data)
+      async function handleNotification(event) {
+        const details = JSON.parse(event.data)
 
-  if (details?.eventBody?.message === 'WebSocket Heartbeat') {
-    log('Heartbeat received')
-    return
-  }
+        if (details?.eventBody?.message === 'WebSocket Heartbeat') {
+          log('Heartbeat received')
+          return
+        }
 
-  if (!details?.topicName) {
-    log('Received message without topicName')
-    return
-  }
+        if (!details?.topicName) {
+          log('Received message without topicName')
+          return
+        }
 
-  console.log('Notification event', details)
+        console.log('Notification event', details)
 
-  if (details.topicName === `v2.users.${userId}.conversations.summaries`) {
-    renderSuggestionEvent({
-      topicName: details.topicName,
-      eventBody: details.eventBody
-    })
-    return
-  }
+        if (details.topicName === `v2.users.${userId}.conversations.summaries`) {
+          renderEvent(details)
+          return
+        }
 
-  if (details.topicName.startsWith(`v2.users.${userId}.conversations`)) {
-    const conversationIds = extractConversationIdsFromConversationEvent(details)
-    for (const conversationId of conversationIds) {
-      if (!trackedConversationIds.has(conversationId)) {
-        await subscribeToConversationSuggestions(conversationId)
-      } else {
-        renderConversationCard(conversationId, details.topicName)
+        if (details.topicName.startsWith(`v2.users.${userId}.conversations`)) {
+          const conversationIds = extractConversationIdsFromConversationEvent(details)
+          for (const conversationId of conversationIds) {
+            if (!trackedConversationIds.has(conversationId)) {
+              await subscribeToConversationSuggestions(conversationId)
+            } else {
+              renderConversationCard(conversationId, details.topicName)
+            }
+          }
+          return
+        }
+
+        if (details.topicName.includes('.suggestions.')) {
+          const conversationId = extractConversationIdFromTopic(details.topicName)
+          if (conversationId && !trackedConversationIds.has(conversationId)) {
+            trackedConversationIds.add(conversationId)
+            renderConversationCard(conversationId, details.topicName)
+            updateMetrics()
+          } else if (conversationId) {
+            renderConversationCard(conversationId, details.topicName)
+          }
+
+          renderEvent(details)
+        }
       }
-    }
-    return
-  }
-
-  if (details.topicName.includes('.suggestions.')) {
-    const conversationId = extractConversationIdFromTopic(details.topicName)
-    if (conversationId && !trackedConversationIds.has(conversationId)) {
-      trackedConversationIds.add(conversationId)
-      renderConversationCard(conversationId, details.topicName)
-      updateMetrics()
-    } else if (conversationId) {
-      renderConversationCard(conversationId, details.topicName)
-    }
-
-    renderSuggestionEvent(details)
-  }
-}
 
       async function connectWebSocket(connectUri) {
         if (webSocket) {
