@@ -379,7 +379,8 @@
         'suggestions.knowledge.search',
         'suggestions.response',
         'suggestions.script',
-        'suggestions.thirdpartyaction'
+        'suggestions.thirdpartyaction',
+        'conversations.summaries'
       ]
 
       function setText(id, value) {
@@ -472,20 +473,21 @@
         return 'generic'
       }
 
-      function extractBestPayloadId(eventBody) {
-        return (
-          eventBody?.id ||
-          eventBody?.eventId ||
-          eventBody?.suggestionId ||
-          eventBody?.articleId ||
-          eventBody?.searchId ||
-          eventBody?.responseId ||
-          eventBody?.scriptId ||
-          eventBody?.actionId ||
-          eventBody?.payload?.id ||
-          'No explicit id found in payload'
-        )
-      }
+function extractBestPayloadId(eventBody) {
+  return (
+    eventBody?.id ||
+    eventBody?.conversationId ||
+    eventBody?.eventId ||
+    eventBody?.suggestionId ||
+    eventBody?.articleId ||
+    eventBody?.searchId ||
+    eventBody?.responseId ||
+    eventBody?.scriptId ||
+    eventBody?.actionId ||
+    eventBody?.payload?.id ||
+    'No explicit id found in payload'
+  )
+}
 
       function renderSuggestionEvent(details) {
         const container = document.getElementById('eventsContainer')
@@ -557,11 +559,14 @@
         log(`Subscribed to ${uniqueTopics.length} topic(s)`)
       }
 
-      async function subscribeToUserConversations() {
-        const topic = `v2.users.${userId}.conversations`
-        await subscribeTopics([topic])
-        log(`Listening for user conversations on ${topic}`)
-      }
+async function subscribeToUserConversations() {
+  const topics = [
+    `v2.users.${userId}.conversations`,
+    `v2.users.${userId}.conversations.summaries`
+  ]
+  await subscribeTopics(topics)
+  log(`Listening for user topics: ${topics.join(', ')}`)
+}
 
       async function subscribeToConversationSuggestions(conversationId) {
         const topics = suggestionTopicSuffixes.map((suffix) => `v2.conversations.${conversationId}.${suffix}`)
@@ -596,46 +601,54 @@
         return Array.from(ids)
       }
 
-      async function handleNotification(event) {
-        const details = JSON.parse(event.data)
+   async function handleNotification(event) {
+  const details = JSON.parse(event.data)
 
-        if (details?.eventBody?.message === 'WebSocket Heartbeat') {
-          log('Heartbeat received')
-          return
-        }
+  if (details?.eventBody?.message === 'WebSocket Heartbeat') {
+    log('Heartbeat received')
+    return
+  }
 
-        if (!details?.topicName) {
-          log('Received message without topicName')
-          return
-        }
+  if (!details?.topicName) {
+    log('Received message without topicName')
+    return
+  }
 
-        console.log('Notification event', details)
+  console.log('Notification event', details)
 
-        if (details.topicName.startsWith(`v2.users.${userId}.conversations`)) {
-          const conversationIds = extractConversationIdsFromConversationEvent(details)
-          for (const conversationId of conversationIds) {
-            if (!trackedConversationIds.has(conversationId)) {
-              await subscribeToConversationSuggestions(conversationId)
-            } else {
-              renderConversationCard(conversationId, details.topicName)
-            }
-          }
-          return
-        }
+  if (details.topicName === `v2.users.${userId}.conversations.summaries`) {
+    renderSuggestionEvent({
+      topicName: details.topicName,
+      eventBody: details.eventBody
+    })
+    return
+  }
 
-        if (details.topicName.includes('.suggestions.')) {
-          const conversationId = extractConversationIdFromTopic(details.topicName)
-          if (conversationId && !trackedConversationIds.has(conversationId)) {
-            trackedConversationIds.add(conversationId)
-            renderConversationCard(conversationId, details.topicName)
-            updateMetrics()
-          } else if (conversationId) {
-            renderConversationCard(conversationId, details.topicName)
-          }
-
-          renderSuggestionEvent(details)
-        }
+  if (details.topicName.startsWith(`v2.users.${userId}.conversations`)) {
+    const conversationIds = extractConversationIdsFromConversationEvent(details)
+    for (const conversationId of conversationIds) {
+      if (!trackedConversationIds.has(conversationId)) {
+        await subscribeToConversationSuggestions(conversationId)
+      } else {
+        renderConversationCard(conversationId, details.topicName)
       }
+    }
+    return
+  }
+
+  if (details.topicName.includes('.suggestions.')) {
+    const conversationId = extractConversationIdFromTopic(details.topicName)
+    if (conversationId && !trackedConversationIds.has(conversationId)) {
+      trackedConversationIds.add(conversationId)
+      renderConversationCard(conversationId, details.topicName)
+      updateMetrics()
+    } else if (conversationId) {
+      renderConversationCard(conversationId, details.topicName)
+    }
+
+    renderSuggestionEvent(details)
+  }
+}
 
       async function connectWebSocket(connectUri) {
         if (webSocket) {
