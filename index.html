@@ -209,6 +209,11 @@
         border-left-color: #0891b2;
       }
 
+      .hold-timer {
+        color: #b42318;
+        font-weight: 700;
+      }
+
       pre {
         background: #0f172a;
         color: #dbe7ff;
@@ -402,6 +407,9 @@
       let capturedEventCount = 0
       const trackedConversationIds = new Set()
       const subscribedTopics = new Set()
+      const conversationMetadataById = new Map()
+      const conversationHoldStarts = new Map()
+      let holdTimerInterval = null
 
       const suggestionTopicSuffixes = [
         'suggestions.intent',
@@ -510,19 +518,63 @@
           .join('\n')
       }
 
-      function collectConversationMetadata(value, metadata = { queueNames: new Set(), attributes: [] }) {
+      function createMetadataAccumulator() {
+        return {
+          queueNames: new Set(),
+          customerAddresses: new Set(),
+          acdNames: new Set(),
+          routingPriorities: new Set(),
+          attributes: []
+        }
+      }
+
+      function collectAddressValues(value, addresses) {
+        if (!value || typeof value !== 'object') return
+
+        if (Array.isArray(value)) {
+          value.forEach((item) => collectAddressValues(item, addresses))
+          return
+        }
+
+        Object.entries(value).forEach(([key, entryValue]) => {
+          if (key === 'address' && typeof entryValue === 'string' && entryValue) {
+            addresses.add(entryValue)
+          }
+          collectAddressValues(entryValue, addresses)
+        })
+      }
+
+      function collectConversationMetadata(value, metadata = createMetadataAccumulator()) {
         if (!value || typeof value !== 'object') return metadata
+
+        const purpose = String(value.purpose || '').toLowerCase()
 
         if (value.conversationRoutingData?.queue?.name) {
           metadata.queueNames.add(value.conversationRoutingData.queue.name)
+        }
+
+        if (value.conversationRoutingData?.priority !== undefined && value.conversationRoutingData?.priority !== null) {
+          metadata.routingPriorities.add(String(value.conversationRoutingData.priority))
         }
 
         if (value.routingData?.queueName) {
           metadata.queueNames.add(value.routingData.queueName)
         }
 
+        if (value.routingData?.priority !== undefined && value.routingData?.priority !== null) {
+          metadata.routingPriorities.add(String(value.routingData.priority))
+        }
+
         if (value.queue?.name && (value.conversationRoutingData || value.routingData || value.purpose === 'acd')) {
           metadata.queueNames.add(value.queue.name)
+        }
+
+        if (purpose === 'customer') {
+          collectAddressValues(value, metadata.customerAddresses)
+        }
+
+        if (purpose === 'acd' && value.name) {
+          metadata.acdNames.add(value.name)
         }
 
         if (value.attributes && typeof value.attributes === 'object' && Object.keys(value.attributes).length) {
@@ -542,17 +594,61 @@
         const metadata = collectConversationMetadata(details?.eventBody)
         return {
           queueNames: Array.from(metadata.queueNames),
+          customerAddresses: Array.from(metadata.customerAddresses),
+          acdNames: Array.from(metadata.acdNames),
+          routingPriorities: Array.from(metadata.routingPriorities),
           attributes: metadata.attributes
         }
+      }
+
+      function uniqueValues(values) {
+        return Array.from(new Set((values || []).filter((value) => value !== undefined && value !== null && value !== '')))
+      }
+
+      function uniqueAttributeObjects(values) {
+        const seen = new Set()
+        return (values || []).filter((value) => {
+          const key = JSON.stringify(value)
+          if (seen.has(key)) return false
+          seen.add(key)
+          return true
+        })
+      }
+
+      function mergeConversationMetadata(conversationId, metadata) {
+        const existing = conversationMetadataById.get(conversationId) || {}
+        const incoming = metadata || {}
+        const merged = {
+          queueNames: uniqueValues([...(existing.queueNames || []), ...(incoming.queueNames || [])]),
+          customerAddresses: uniqueValues([...(existing.customerAddresses || []), ...(incoming.customerAddresses || [])]),
+          acdNames: uniqueValues([...(existing.acdNames || []), ...(incoming.acdNames || [])]),
+          routingPriorities: uniqueValues([...(existing.routingPriorities || []), ...(incoming.routingPriorities || [])]),
+          attributes: uniqueAttributeObjects([...(existing.attributes || []), ...(incoming.attributes || [])])
+        }
+
+        conversationMetadataById.set(conversationId, merged)
+        return merged
       }
 
       function renderConversationMetadata(metadata) {
         if (!metadata) return ''
 
         const queueNames = metadata.queueNames || []
+        const customerAddresses = metadata.customerAddresses || []
+        const acdNames = metadata.acdNames || []
+        const routingPriorities = metadata.routingPriorities || []
         const attributes = metadata.attributes || []
+        const customerMarkup = customerAddresses.length
+          ? `<div class="row"><span class="label">Customer Address</span><span class="mono">${escapeHtml(customerAddresses.join(', '))}</span></div>`
+          : ''
+        const acdMarkup = acdNames.length
+          ? `<div class="row"><span class="label">ACD Participant</span><span class="mono">${escapeHtml(acdNames.join(', '))}</span></div>`
+          : ''
         const queueMarkup = queueNames.length
           ? `<div class="row"><span class="label">Routing Queue</span><span class="mono queue-name">${escapeHtml(queueNames.join(', '))}</span></div>`
+          : ''
+        const priorityMarkup = routingPriorities.length
+          ? `<div class="row"><span class="label">Routing Priority</span><span class="mono">${escapeHtml(routingPriorities.join(', '))}</span></div>`
           : ''
         const attributesMarkup = attributes.length
           ? `
@@ -561,7 +657,85 @@
           `
           : ''
 
-        return queueMarkup + attributesMarkup
+        return customerMarkup + acdMarkup + queueMarkup + priorityMarkup + attributesMarkup
+      }
+
+      function formatHoldDuration(durationMs) {
+        const totalSeconds = Math.max(0, Math.floor(durationMs / 1000))
+        const hours = Math.floor(totalSeconds / 3600)
+        const minutes = Math.floor((totalSeconds % 3600) / 60)
+        const seconds = totalSeconds % 60
+
+        if (hours > 0) {
+          return [hours, minutes, seconds].map((value) => String(value).padStart(2, '0')).join(':')
+        }
+
+        return [minutes, seconds].map((value) => String(value).padStart(2, '0')).join(':')
+      }
+
+      function renderHoldTimer(conversationId) {
+        const holdStart = conversationHoldStarts.get(conversationId)
+        if (!holdStart) return ''
+
+        return `
+          <div class="row">
+            <span class="label">Hold Time</span>
+            <span class="mono hold-timer">${escapeHtml(formatHoldDuration(Date.now() - holdStart))}</span>
+          </div>
+        `
+      }
+
+      function updateHoldTimerDisplay(conversationId) {
+        const safeId = `conv-${conversationId.replace(/[^a-zA-Z0-9_-]/g, '_')}`
+        const card = document.getElementById(safeId)
+        const target = card?.querySelector('.conversation-hold')
+        if (target) target.innerHTML = renderHoldTimer(conversationId)
+      }
+
+      function updateAllHoldTimers() {
+        conversationHoldStarts.forEach((_holdStart, conversationId) => updateHoldTimerDisplay(conversationId))
+      }
+
+      function syncHoldTimerInterval() {
+        if (conversationHoldStarts.size && !holdTimerInterval) {
+          holdTimerInterval = window.setInterval(updateAllHoldTimers, 1000)
+        } else if (!conversationHoldStarts.size && holdTimerInterval) {
+          window.clearInterval(holdTimerInterval)
+          holdTimerInterval = null
+        }
+      }
+
+      function collectStartHoldTimes(value, starts = []) {
+        if (!value || typeof value !== 'object') return starts
+
+        if (Array.isArray(value)) {
+          value.forEach((item) => collectStartHoldTimes(item, starts))
+          return starts
+        }
+
+        Object.entries(value).forEach(([key, entryValue]) => {
+          if (key === 'startHoldTime' && typeof entryValue === 'string' && entryValue) {
+            const holdStart = Date.parse(entryValue)
+            if (Number.isFinite(holdStart)) starts.push(holdStart)
+          }
+
+          collectStartHoldTimes(entryValue, starts)
+        })
+
+        return starts
+      }
+
+      function updateConversationHoldState(conversationId, details) {
+        const holdStarts = collectStartHoldTimes(details?.eventBody)
+
+        if (holdStarts.length) {
+          conversationHoldStarts.set(conversationId, Math.min(...holdStarts))
+        } else {
+          conversationHoldStarts.delete(conversationId)
+        }
+
+        updateHoldTimerDisplay(conversationId)
+        syncHoldTimerInterval()
       }
 
       function updateConversationMetadata(card, metadata) {
@@ -578,6 +752,7 @@
 
         const safeId = `conv-${conversationId.replace(/[^a-zA-Z0-9_-]/g, '_')}`
         const existing = document.getElementById(safeId)
+        const mergedMetadata = mergeConversationMetadata(conversationId, metadata)
 
         if (existing) {
           const lastSeen = existing.querySelector('.last-seen')
@@ -586,7 +761,8 @@
           const sourceNode = existing.querySelector('.detected-from')
           if (sourceNode) sourceNode.textContent = sourceTopic
 
-          updateConversationMetadata(existing, metadata)
+          updateConversationMetadata(existing, mergedMetadata)
+          updateHoldTimerDisplay(conversationId)
           container.prepend(existing)
           return
         }
@@ -599,7 +775,8 @@
           <div class="value mono">${escapeHtml(conversationId)}</div>
           <div class="row"><span class="label">Detected From</span><span class="mono detected-from">${escapeHtml(sourceTopic)}</span></div>
           <div class="row"><span class="label">Last Seen</span><span class="mono last-seen">${escapeHtml(new Date().toLocaleString())}</span></div>
-          <div class="conversation-metadata">${renderConversationMetadata(metadata)}</div>
+          <div class="conversation-metadata">${renderConversationMetadata(mergedMetadata)}</div>
+          <div class="conversation-hold">${renderHoldTimer(conversationId)}</div>
           <div class="pill-row">
             ${conversationTopicSuffixes.map((suffix) => `<span class="pill">${escapeHtml(suffix)}</span>`).join('')}
           </div>
@@ -809,6 +986,8 @@
           const conversationIds = extractConversationIdsFromConversationEvent(details)
           const conversationMetadata = extractConversationMetadata(details)
           for (const conversationId of conversationIds) {
+            updateConversationHoldState(conversationId, details)
+
             if (!trackedConversationIds.has(conversationId)) {
               await subscribeToConversationSuggestions(conversationId, conversationMetadata)
             } else {
@@ -886,6 +1065,9 @@
             sessionStorage.removeItem('gc_channelid')
             subscribedTopics.clear()
             trackedConversationIds.clear()
+            conversationMetadataById.clear()
+            conversationHoldStarts.clear()
+            syncHoldTimerInterval()
             document.getElementById('conversationsContainer').innerHTML = ''
             document.getElementById('eventsContainer').innerHTML = ''
             capturedEventCount = 0
