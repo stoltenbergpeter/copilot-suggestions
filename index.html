@@ -205,6 +205,10 @@
         border-left-color: #344054;
       }
 
+      .event-card.transcription {
+        border-left-color: #0891b2;
+      }
+
       pre {
         background: #0f172a;
         color: #dbe7ff;
@@ -407,6 +411,7 @@
         'suggestions.script',
         'suggestions.thirdpartyaction'
       ]
+      const conversationTopicSuffixes = [...suggestionTopicSuffixes, 'transcription']
 
       function setText(id, value) {
         document.getElementById(id).textContent = value || '-'
@@ -481,7 +486,7 @@
         document.getElementById('eventsContainer').innerHTML = ''
         updateMetrics()
         renderEmptyEvents()
-        log('Cleared rendered suggestion events')
+        log('Cleared rendered events')
       }
 
       function renderEmptyConversations() {
@@ -498,7 +503,75 @@
         }
       }
 
-      function renderConversationCard(conversationId, sourceTopic) {
+      function formatObjectEntries(value) {
+        if (!value || typeof value !== 'object') return ''
+        return Object.entries(value)
+          .map(([key, entryValue]) => `${key}: ${typeof entryValue === 'object' ? JSON.stringify(entryValue) : entryValue}`)
+          .join('\n')
+      }
+
+      function collectConversationMetadata(value, metadata = { queueNames: new Set(), attributes: [] }) {
+        if (!value || typeof value !== 'object') return metadata
+
+        if (value.conversationRoutingData?.queue?.name) {
+          metadata.queueNames.add(value.conversationRoutingData.queue.name)
+        }
+
+        if (value.routingData?.queueName) {
+          metadata.queueNames.add(value.routingData.queueName)
+        }
+
+        if (value.queue?.name && (value.conversationRoutingData || value.routingData || value.purpose === 'acd')) {
+          metadata.queueNames.add(value.queue.name)
+        }
+
+        if (value.attributes && typeof value.attributes === 'object' && Object.keys(value.attributes).length) {
+          metadata.attributes.push(value.attributes)
+        }
+
+        if (Array.isArray(value)) {
+          value.forEach((item) => collectConversationMetadata(item, metadata))
+          return metadata
+        }
+
+        Object.values(value).forEach((item) => collectConversationMetadata(item, metadata))
+        return metadata
+      }
+
+      function extractConversationMetadata(details) {
+        const metadata = collectConversationMetadata(details?.eventBody)
+        return {
+          queueNames: Array.from(metadata.queueNames),
+          attributes: metadata.attributes
+        }
+      }
+
+      function renderConversationMetadata(metadata) {
+        if (!metadata) return ''
+
+        const queueNames = metadata.queueNames || []
+        const attributes = metadata.attributes || []
+        const queueMarkup = queueNames.length
+          ? `<div class="row"><span class="label">Routing Queue</span><span class="mono queue-name">${escapeHtml(queueNames.join(', '))}</span></div>`
+          : ''
+        const attributesMarkup = attributes.length
+          ? `
+            <div class="label">Attributes</div>
+            <pre class="conversation-attributes">${escapeHtml(attributes.map(formatObjectEntries).filter(Boolean).join('\n\n'))}</pre>
+          `
+          : ''
+
+        return queueMarkup + attributesMarkup
+      }
+
+      function updateConversationMetadata(card, metadata) {
+        if (!metadata) return
+
+        const target = card.querySelector('.conversation-metadata')
+        if (target) target.innerHTML = renderConversationMetadata(metadata)
+      }
+
+      function renderConversationCard(conversationId, sourceTopic, metadata = null) {
         const container = document.getElementById('conversationsContainer')
         const empty = container.querySelector('.empty-state')
         if (empty) empty.remove()
@@ -513,6 +586,7 @@
           const sourceNode = existing.querySelector('.detected-from')
           if (sourceNode) sourceNode.textContent = sourceTopic
 
+          updateConversationMetadata(existing, metadata)
           container.prepend(existing)
           return
         }
@@ -525,8 +599,9 @@
           <div class="value mono">${escapeHtml(conversationId)}</div>
           <div class="row"><span class="label">Detected From</span><span class="mono detected-from">${escapeHtml(sourceTopic)}</span></div>
           <div class="row"><span class="label">Last Seen</span><span class="mono last-seen">${escapeHtml(new Date().toLocaleString())}</span></div>
+          <div class="conversation-metadata">${renderConversationMetadata(metadata)}</div>
           <div class="pill-row">
-            ${suggestionTopicSuffixes.map((suffix) => `<span class="pill">${escapeHtml(suffix)}</span>`).join('')}
+            ${conversationTopicSuffixes.map((suffix) => `<span class="pill">${escapeHtml(suffix)}</span>`).join('')}
           </div>
         `
         container.prepend(card)
@@ -540,6 +615,7 @@
         if (topicName.includes('suggestions.script')) return 'script'
         if (topicName.includes('suggestions.thirdpartyaction')) return 'thirdpartyaction'
         if (topicName.includes('conversations.summaries')) return 'summary'
+        if (topicName.includes('.transcription')) return 'transcription'
         return 'generic'
       }
 
@@ -555,8 +631,32 @@
           eventBody?.scriptId ||
           eventBody?.actionId ||
           eventBody?.payload?.id ||
+          eventBody?.transcripts?.[0]?.utteranceId ||
           'No explicit id found in payload'
         )
+      }
+
+      function getTranscriptChannelLabel(channel) {
+        if (!channel) return 'Unknown'
+        if (typeof channel === 'string') return channel
+        if (Array.isArray(channel.enum)) return channel.enum.join(', ')
+        return JSON.stringify(channel)
+      }
+
+      function extractTranscriptLines(eventBody) {
+        if (!Array.isArray(eventBody?.transcripts)) return []
+
+        return eventBody.transcripts
+          .map((transcript) => {
+            const alternative = transcript?.alternatives?.[0]
+            const text = alternative?.decoratedTranscript || alternative?.transcript
+            if (!text) return null
+
+            const finality = transcript.isFinal ? 'final' : 'partial'
+            const channel = getTranscriptChannelLabel(transcript.channel)
+            return `[${finality} | ${channel}] ${text}`
+          })
+          .filter(Boolean)
       }
 
       function renderEvent(details) {
@@ -572,6 +672,14 @@
           'Unknown'
 
         const payloadId = extractBestPayloadId(details.eventBody)
+        const transcriptLines = extractTranscriptLines(details.eventBody)
+        const transcriptMarkup =
+          eventType === 'transcription' && transcriptLines.length
+            ? `
+              <div class="label">Transcript</div>
+              <pre>${escapeHtml(transcriptLines.join('\n'))}</pre>
+            `
+            : ''
 
         const card = document.createElement('div')
         card.className = `card event-card ${eventType}`
@@ -581,6 +689,7 @@
           <div class="row"><span class="label">Conversation</span><span class="mono">${escapeHtml(conversationId)}</span></div>
           <div class="row"><span class="label">Payload ID</span><span class="mono">${escapeHtml(payloadId)}</span></div>
           <div class="row"><span class="label">Received</span><span class="mono">${escapeHtml(new Date().toLocaleString())}</span></div>
+          ${transcriptMarkup}
           <pre>${escapeHtml(JSON.stringify(details.eventBody, null, 2))}</pre>
         `
 
@@ -643,13 +752,13 @@
         log(`Listening for user topics: ${topics.join(', ')}`)
       }
 
-      async function subscribeToConversationSuggestions(conversationId) {
-        const topics = suggestionTopicSuffixes.map((suffix) => `v2.conversations.${conversationId}.${suffix}`)
+      async function subscribeToConversationSuggestions(conversationId, metadata = null) {
+        const topics = conversationTopicSuffixes.map((suffix) => `v2.conversations.${conversationId}.${suffix}`)
         await subscribeTopics(topics)
         trackedConversationIds.add(conversationId)
-        renderConversationCard(conversationId, 'user conversation notification')
+        renderConversationCard(conversationId, 'user conversation notification', metadata)
         updateMetrics()
-        log(`Tracking conversation ${conversationId}`)
+        log(`Tracking conversation ${conversationId} suggestion and transcription topics`)
       }
 
       function extractConversationIdsFromConversationEvent(details) {
@@ -698,17 +807,18 @@
 
         if (details.topicName.startsWith(`v2.users.${userId}.conversations`)) {
           const conversationIds = extractConversationIdsFromConversationEvent(details)
+          const conversationMetadata = extractConversationMetadata(details)
           for (const conversationId of conversationIds) {
             if (!trackedConversationIds.has(conversationId)) {
-              await subscribeToConversationSuggestions(conversationId)
+              await subscribeToConversationSuggestions(conversationId, conversationMetadata)
             } else {
-              renderConversationCard(conversationId, details.topicName)
+              renderConversationCard(conversationId, details.topicName, conversationMetadata)
             }
           }
           return
         }
 
-        if (details.topicName.includes('.suggestions.')) {
+        if (details.topicName.includes('.suggestions.') || details.topicName.includes('.transcription')) {
           const conversationId = extractConversationIdFromTopic(details.topicName)
           if (conversationId && !trackedConversationIds.has(conversationId)) {
             trackedConversationIds.add(conversationId)
