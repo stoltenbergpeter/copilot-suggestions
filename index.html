@@ -354,10 +354,6 @@
       'use strict'
 
       const url = new URL(document.location.href)
-      const accessTokenStorageKey = 'gc_access_token'
-      const accessTokenExpiresAtStorageKey = 'gc_access_token_expires_at'
-      const oauthStateStorageKey = 'gc_oauth_state'
-
       function getCurrentPageCallbackUrl() {
         const callbackUrl = new URL(window.location.href)
         callbackUrl.hash = ''
@@ -420,113 +416,6 @@
           .replaceAll('>', '&gt;')
           .replaceAll('"', '&quot;')
           .replaceAll("'", '&#39;')
-      }
-
-      function createOAuthState() {
-        if (window.crypto?.getRandomValues) {
-          const values = new Uint32Array(4)
-          window.crypto.getRandomValues(values)
-          return Array.from(values, (value) => value.toString(16).padStart(8, '0')).join('')
-        }
-
-        return `${Date.now()}-${Math.random().toString(16).slice(2)}`
-      }
-
-      function clearStoredAccessToken() {
-        sessionStorage.removeItem(accessTokenStorageKey)
-        sessionStorage.removeItem(accessTokenExpiresAtStorageKey)
-      }
-
-      function storeAccessToken(accessToken, expiresInSeconds) {
-        sessionStorage.setItem(accessTokenStorageKey, accessToken)
-
-        const expiresIn = Number(expiresInSeconds)
-        if (Number.isFinite(expiresIn) && expiresIn > 0) {
-          const expiresAt = Date.now() + Math.max(expiresIn - 60, 1) * 1000
-          sessionStorage.setItem(accessTokenExpiresAtStorageKey, String(expiresAt))
-        } else {
-          sessionStorage.removeItem(accessTokenExpiresAtStorageKey)
-        }
-      }
-
-      function removeOAuthHashFromAddressBar() {
-        if (window.history?.replaceState) {
-          window.history.replaceState(null, document.title, window.location.href.split('#')[0])
-        }
-      }
-
-      function readAccessTokenFromCallback() {
-        if (!window.location.hash) return null
-
-        const hashParams = new URLSearchParams(window.location.hash.slice(1))
-        const oauthError = hashParams.get('error')
-        if (oauthError) {
-          const description = hashParams.get('error_description')
-          removeOAuthHashFromAddressBar()
-          throw new Error(`Genesys Cloud OAuth failed: ${description || oauthError}`)
-        }
-
-        const accessToken = hashParams.get('access_token')
-        if (!accessToken) return null
-
-        const returnedState = hashParams.get('state')
-        const expectedState = sessionStorage.getItem(oauthStateStorageKey)
-        sessionStorage.removeItem(oauthStateStorageKey)
-
-        if (!expectedState || returnedState !== expectedState) {
-          clearStoredAccessToken()
-          removeOAuthHashFromAddressBar()
-          throw new Error('Genesys Cloud OAuth state did not match. Start the login flow again.')
-        }
-
-        storeAccessToken(accessToken, hashParams.get('expires_in'))
-        removeOAuthHashFromAddressBar()
-        log('Received Genesys Cloud auth token from callback')
-        return accessToken
-      }
-
-      function getStoredAccessToken() {
-        const callbackToken = readAccessTokenFromCallback()
-        if (callbackToken) return callbackToken
-
-        const accessToken = sessionStorage.getItem(accessTokenStorageKey)
-        if (!accessToken) return null
-
-        const expiresAt = Number(sessionStorage.getItem(accessTokenExpiresAtStorageKey))
-        if (expiresAt && Date.now() >= expiresAt) {
-          clearStoredAccessToken()
-          log('Stored Genesys Cloud auth token expired')
-          return null
-        }
-
-        return accessToken
-      }
-
-      function redirectToGenesysLogin() {
-        const state = createOAuthState()
-        sessionStorage.setItem(oauthStateStorageKey, state)
-
-        const authorizeUrl = new URL(`https://login.${gc_region}/oauth/authorize`)
-        authorizeUrl.searchParams.set('client_id', gc_clientId)
-        authorizeUrl.searchParams.set('response_type', 'token')
-        authorizeUrl.searchParams.set('redirect_uri', gc_redirectUrl)
-        authorizeUrl.searchParams.set('state', state)
-
-        log('No Genesys Cloud auth token found. Redirecting to Genesys Cloud login.')
-        window.location.assign(authorizeUrl.toString())
-      }
-
-      function applyAccessToken(accessToken) {
-        if (typeof client.setAccessToken !== 'function') {
-          throw new Error('The Genesys Cloud JavaScript SDK did not expose client.setAccessToken')
-        }
-
-        client.setAccessToken(accessToken)
-      }
-
-      function isUnauthorizedError(err) {
-        const status = err?.status || err?.statusCode || err?.response?.status
-        return Number(status) === 401
       }
 
       function updateMetrics() {
@@ -822,14 +711,8 @@
           client.setEnvironment(gc_region)
           client.setPersistSettings(true, '_gc_copilot_monitor_')
 
-          const accessToken = getStoredAccessToken()
-          if (!accessToken) {
-            redirectToGenesysLogin()
-            return
-          }
-
-          applyAccessToken(accessToken)
-          log('Using Genesys Cloud auth token')
+          log('Logging in to Genesys Cloud with PKCE')
+          await client.loginPKCEGrant(gc_clientId, gc_redirectUrl, {})
 
           const user = await uapi.getUsersMe({})
           userId = user.id
@@ -858,14 +741,6 @@
           }
         } catch (err) {
           console.error('Startup error', err)
-
-          if (isUnauthorizedError(err) && gc_region && gc_clientId && gc_redirectUrl) {
-            clearStoredAccessToken()
-            log('Stored Genesys Cloud auth token was rejected. Redirecting to login.')
-            redirectToGenesysLogin()
-            return
-          }
-
           log(`Startup error: ${err.message || err}`)
         }
       }
