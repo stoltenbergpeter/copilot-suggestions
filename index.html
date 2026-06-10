@@ -288,7 +288,7 @@
       }
     </style>
   </head>
-  <body onload="start()">
+  <body>
     <div class="page">
       <section class="hero">
         <h1>Genesys Copilot Conversation Monitor</h1>
@@ -302,11 +302,11 @@
         <div class="card stack">
           <h3>Connection</h3>
           <div class="controls">
-            <gux-button accent="primary" onclick="start(true)">Reconnect</gux-button>
-            <gux-button accent="secondary" onclick="clearEvents()">Clear Events</gux-button>
+            <gux-button id="reconnectButton" accent="primary">Reconnect</gux-button>
+            <gux-button id="clearEventsButton" accent="secondary">Clear Events</gux-button>
           </div>
           <div id="fallbackLoginControl" class="controls" hidden>
-            <gux-button accent="primary" onclick="loginWithDefaultGenesysConfig()">Log in to Genesys Cloud</gux-button>
+            <gux-button id="fallbackLoginButton" accent="primary">Log in to Genesys Cloud</gux-button>
           </div>
           <div class="row"><span class="label">Region</span><span id="regionValue" class="value"></span></div>
           <div class="row"><span class="label">Client ID</span><span id="clientValue" class="value"></span></div>
@@ -359,6 +359,7 @@
       const url = new URL(document.location.href)
       const defaultGenesysRegion = 'usw2.pure.cloud'
       const defaultGenesysClientId = '409225b8-66a3-407c-92ad-fa386bad3e79'
+      const defaultGenesysRedirectUrl = 'https://stoltenbergpeter.github.io/copilot-suggestions/'
 
       function getCurrentPageCallbackUrl() {
         const callbackUrl = new URL(window.location.href)
@@ -376,18 +377,20 @@
 
       let gc_region = normalizeGenesysRegion(url.searchParams.get('gc_region') || sessionStorage.getItem('gc_region'))
       let gc_clientId = url.searchParams.get('gc_clientId') || sessionStorage.getItem('gc_clientId')
-      let gc_redirectUrl = url.searchParams.get('gc_redirectUrl') || sessionStorage.getItem('gc_redirectUrl') || getCurrentPageCallbackUrl()
+      let gc_redirectUrl = url.searchParams.get('gc_redirectUrl') || sessionStorage.getItem('gc_redirectUrl') || defaultGenesysRedirectUrl
       let gc_conversationId = url.searchParams.get('gc_conversationId') || sessionStorage.getItem('gc_conversationId')
+
+      if (gc_redirectUrl.startsWith('file:')) gc_redirectUrl = defaultGenesysRedirectUrl
 
       if (gc_region) sessionStorage.setItem('gc_region', gc_region)
       if (gc_clientId) sessionStorage.setItem('gc_clientId', gc_clientId)
       if (gc_redirectUrl) sessionStorage.setItem('gc_redirectUrl', gc_redirectUrl)
       if (gc_conversationId) sessionStorage.setItem('gc_conversationId', gc_conversationId)
 
-      const platformClient = require('platformClient')
-      const client = platformClient.ApiClient.instance
-      const uapi = new platformClient.UsersApi()
-      const napi = new platformClient.NotificationsApi()
+      let platformClient = null
+      let client = null
+      let uapi = null
+      let napi = null
 
       let userId = null
       let channelId = null
@@ -420,6 +423,19 @@
         if (control) control.hidden = !isVisible
       }
 
+      function ensureGenesysSdk() {
+        if (client && uapi && napi) return
+
+        if (typeof require !== 'function') {
+          throw new Error('Genesys Cloud JavaScript SDK is not loaded yet')
+        }
+
+        platformClient = require('platformClient')
+        client = platformClient.ApiClient.instance
+        uapi = new platformClient.UsersApi()
+        napi = new platformClient.NotificationsApi()
+      }
+
       function saveGenesysConfig() {
         if (gc_region) sessionStorage.setItem('gc_region', gc_region)
         if (gc_clientId) sessionStorage.setItem('gc_clientId', gc_clientId)
@@ -430,7 +446,7 @@
       function loginWithDefaultGenesysConfig() {
         gc_region = defaultGenesysRegion
         gc_clientId = defaultGenesysClientId
-        gc_redirectUrl = gc_redirectUrl || getCurrentPageCallbackUrl()
+        gc_redirectUrl = defaultGenesysRedirectUrl
         saveGenesysConfig()
         updateConnectionDisplay()
         setFallbackLoginVisible(false)
@@ -744,6 +760,58 @@
           }
 
           setFallbackLoginVisible(false)
+          ensureGenesysSdk()
           client.setEnvironment(gc_region)
           client.setPersistSettings(true, '_gc_copilot_monitor_')
 
+          log('Logging in to Genesys Cloud with PKCE')
+          await client.loginPKCEGrant(gc_clientId, gc_redirectUrl, {})
+
+          const user = await uapi.getUsersMe({})
+          userId = user.id
+          updateMetrics()
+          log(`Authenticated as ${user.name || user.id}`)
+
+          if (forceReconnect) {
+            sessionStorage.removeItem('gc_channelid')
+            subscribedTopics.clear()
+            trackedConversationIds.clear()
+            document.getElementById('conversationsContainer').innerHTML = ''
+            document.getElementById('eventsContainer').innerHTML = ''
+            capturedEventCount = 0
+            updateMetrics()
+            renderEmptyConversations()
+            renderEmptyEvents()
+          }
+
+          const channel = await ensureNotificationChannel()
+          await connectWebSocket(channel.connectUri)
+          await subscribeToUserConversations()
+
+          if (gc_conversationId) {
+            await subscribeToConversationSuggestions(gc_conversationId)
+            log(`Preloaded conversation from querystring: ${gc_conversationId}`)
+          }
+        } catch (err) {
+          console.error('Startup error', err)
+          log(`Startup error: ${err.message || err}`)
+        }
+      }
+
+      function bindPageEvents() {
+        document.getElementById('reconnectButton')?.addEventListener('click', () => start(true))
+        document.getElementById('clearEventsButton')?.addEventListener('click', clearEvents)
+        document.getElementById('fallbackLoginButton')?.addEventListener('click', loginWithDefaultGenesysConfig)
+      }
+
+      window.start = start
+      window.clearEvents = clearEvents
+      window.loginWithDefaultGenesysConfig = loginWithDefaultGenesysConfig
+
+      window.addEventListener('load', () => {
+        bindPageEvents()
+        start()
+      })
+    </script>
+  </body>
+</html>
