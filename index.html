@@ -305,6 +305,9 @@
             <gux-button accent="primary" onclick="start(true)">Reconnect</gux-button>
             <gux-button accent="secondary" onclick="clearEvents()">Clear Events</gux-button>
           </div>
+          <div id="fallbackLoginControl" class="controls" hidden>
+            <gux-button accent="primary" onclick="loginWithDefaultGenesysConfig()">Log in to Genesys Cloud</gux-button>
+          </div>
           <div class="row"><span class="label">Region</span><span id="regionValue" class="value"></span></div>
           <div class="row"><span class="label">Client ID</span><span id="clientValue" class="value"></span></div>
           <div class="row"><span class="label">Redirect URL</span><span id="redirectValue" class="value"></span></div>
@@ -354,6 +357,9 @@
       'use strict'
 
       const url = new URL(document.location.href)
+      const defaultGenesysRegion = 'usw2.pure.cloud'
+      const defaultGenesysClientId = '409225b8-66a3-407c-92ad-fa386bad3e79'
+
       function getCurrentPageCallbackUrl() {
         const callbackUrl = new URL(window.location.href)
         callbackUrl.hash = ''
@@ -401,6 +407,35 @@
 
       function setText(id, value) {
         document.getElementById(id).textContent = value || '-'
+      }
+
+      function updateConnectionDisplay() {
+        setText('regionValue', gc_region || '-')
+        setText('clientValue', gc_clientId || '-')
+        setText('redirectValue', gc_redirectUrl || '-')
+      }
+
+      function setFallbackLoginVisible(isVisible) {
+        const control = document.getElementById('fallbackLoginControl')
+        if (control) control.hidden = !isVisible
+      }
+
+      function saveGenesysConfig() {
+        if (gc_region) sessionStorage.setItem('gc_region', gc_region)
+        if (gc_clientId) sessionStorage.setItem('gc_clientId', gc_clientId)
+        if (gc_redirectUrl) sessionStorage.setItem('gc_redirectUrl', gc_redirectUrl)
+        if (gc_conversationId) sessionStorage.setItem('gc_conversationId', gc_conversationId)
+      }
+
+      function loginWithDefaultGenesysConfig() {
+        gc_region = defaultGenesysRegion
+        gc_clientId = defaultGenesysClientId
+        gc_redirectUrl = gc_redirectUrl || getCurrentPageCallbackUrl()
+        saveGenesysConfig()
+        updateConnectionDisplay()
+        setFallbackLoginVisible(false)
+        log('Using default Genesys Cloud login settings')
+        start(true)
       }
 
       function log(message) {
@@ -697,53 +732,18 @@
 
       async function start(forceReconnect = false) {
         try {
-          document.getElementById('regionValue').textContent = gc_region || '-'
-          document.getElementById('clientValue').textContent = gc_clientId || '-'
-          document.getElementById('redirectValue').textContent = gc_redirectUrl || '-'
+          updateConnectionDisplay()
 
           renderEmptyConversations()
           renderEmptyEvents()
 
           if (!gc_region || !gc_clientId) {
-            throw new Error('Missing gc_region or gc_clientId in the URL or session storage')
+            setFallbackLoginVisible(true)
+            log('Missing gc_region or gc_clientId. Use the login button to continue with the default Genesys Cloud settings.')
+            return
           }
 
+          setFallbackLoginVisible(false)
           client.setEnvironment(gc_region)
           client.setPersistSettings(true, '_gc_copilot_monitor_')
 
-          log('Logging in to Genesys Cloud with PKCE')
-          await client.loginPKCEGrant(gc_clientId, gc_redirectUrl, {})
-
-          const user = await uapi.getUsersMe({})
-          userId = user.id
-          updateMetrics()
-          log(`Authenticated as ${user.name || user.id}`)
-
-          if (forceReconnect) {
-            sessionStorage.removeItem('gc_channelid')
-            subscribedTopics.clear()
-            trackedConversationIds.clear()
-            document.getElementById('conversationsContainer').innerHTML = ''
-            document.getElementById('eventsContainer').innerHTML = ''
-            capturedEventCount = 0
-            updateMetrics()
-            renderEmptyConversations()
-            renderEmptyEvents()
-          }
-
-          const channel = await ensureNotificationChannel()
-          await connectWebSocket(channel.connectUri)
-          await subscribeToUserConversations()
-
-          if (gc_conversationId) {
-            await subscribeToConversationSuggestions(gc_conversationId)
-            log(`Preloaded conversation from querystring: ${gc_conversationId}`)
-          }
-        } catch (err) {
-          console.error('Startup error', err)
-          log(`Startup error: ${err.message || err}`)
-        }
-      }
-    </script>
-  </body>
-</html>
