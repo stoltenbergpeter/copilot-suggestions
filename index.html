@@ -456,6 +456,32 @@
         if (gc_conversationId) sessionStorage.setItem('gc_conversationId', gc_conversationId)
       }
 
+      function applyDefaultGenesysConfigIfMissing() {
+        let usedDefault = false
+
+        if (!gc_region) {
+          gc_region = defaultGenesysRegion
+          usedDefault = true
+        }
+
+        if (!gc_clientId) {
+          gc_clientId = defaultGenesysClientId
+          usedDefault = true
+        }
+
+        if (!gc_redirectUrl || gc_redirectUrl.startsWith('file:')) {
+          gc_redirectUrl = defaultGenesysRedirectUrl
+          usedDefault = true
+        }
+
+        if (usedDefault) {
+          saveGenesysConfig()
+          log('Using default Genesys Cloud login settings')
+        }
+
+        return usedDefault
+      }
+
       function loginWithDefaultGenesysConfig() {
         gc_region = defaultGenesysRegion
         gc_clientId = defaultGenesysClientId
@@ -1037,6 +1063,7 @@
 
       async function start(forceReconnect = false) {
         try {
+          applyDefaultGenesysConfigIfMissing()
           updateConnectionDisplay()
 
           renderEmptyConversations()
