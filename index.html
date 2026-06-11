@@ -410,6 +410,9 @@
       const conversationMetadataById = new Map()
       const conversationHoldStarts = new Map()
       let holdTimerInterval = null
+      let reconnectTimer = null
+      let reconnectAttempt = 0
+      let isStarting = false
 
       const suggestionTopicSuffixes = [
         'suggestions.intent',
@@ -1037,31 +1040,68 @@
         }
       }
 
+      function clearReconnectTimer() {
+        if (reconnectTimer) {
+          window.clearTimeout(reconnectTimer)
+          reconnectTimer = null
+        }
+      }
+
+      function scheduleWebSocketReconnect(reason) {
+        if (reconnectTimer) return
+
+        reconnectAttempt += 1
+        const delayMs = Math.min(30000, 1000 * 2 ** Math.min(reconnectAttempt - 1, 5))
+        log(`${reason}. Reconnecting in ${Math.round(delayMs / 1000)} second(s).`)
+
+        reconnectTimer = window.setTimeout(() => {
+          reconnectTimer = null
+          start(false, true)
+        }, delayMs)
+      }
+
       async function connectWebSocket(connectUri) {
         if (webSocket) {
           try {
+            webSocket.intentionalClose = true
             webSocket.close()
           } catch (err) {
             console.warn('Error closing previous websocket', err)
           }
         }
 
-        webSocket = new WebSocket(connectUri)
-        webSocket.onopen = () => log('WebSocket connected')
-        webSocket.onmessage = (event) => {
+        const socket = new WebSocket(connectUri)
+        webSocket = socket
+
+        socket.onopen = () => {
+          reconnectAttempt = 0
+          clearReconnectTimer()
+          log('WebSocket connected')
+        }
+        socket.onmessage = (event) => {
           handleNotification(event).catch((err) => {
             console.error('Notification handling error', err)
             log(`Notification handling error: ${err.message || err}`)
           })
         }
-        webSocket.onerror = (err) => {
+        socket.onerror = (err) => {
           console.error('WebSocket error', err)
           log('WebSocket error occurred')
         }
-        webSocket.onclose = () => log('WebSocket closed')
+        socket.onclose = (event) => {
+          const closeDetails = event?.code ? `code ${event.code}${event.reason ? `: ${event.reason}` : ''}` : 'no close code'
+          log(`WebSocket closed (${closeDetails})`)
+
+          if (socket.intentionalClose || webSocket !== socket) return
+
+          scheduleWebSocketReconnect('WebSocket closed unexpectedly')
+        }
       }
 
-      async function start(forceReconnect = false) {
+      async function start(forceReconnect = false, autoReconnect = false) {
+        if (isStarting) return
+        isStarting = true
+
         try {
           applyDefaultGenesysConfigIfMissing()
           updateConnectionDisplay()
@@ -1089,6 +1129,8 @@
           log(`Authenticated as ${user.name || user.id}`)
 
           if (forceReconnect) {
+            clearReconnectTimer()
+            reconnectAttempt = 0
             sessionStorage.removeItem('gc_channelid')
             subscribedTopics.clear()
             trackedConversationIds.clear()
@@ -1101,11 +1143,18 @@
             updateMetrics()
             renderEmptyConversations()
             renderEmptyEvents()
+          } else if (autoReconnect) {
+            sessionStorage.removeItem('gc_channelid')
+            subscribedTopics.clear()
           }
 
           const channel = await ensureNotificationChannel()
           await connectWebSocket(channel.connectUri)
           await subscribeToUserConversations()
+
+          for (const conversationId of Array.from(trackedConversationIds)) {
+            await subscribeToConversationSuggestions(conversationId, conversationMetadataById.get(conversationId))
+          }
 
           if (gc_conversationId) {
             await subscribeToConversationSuggestions(gc_conversationId)
@@ -1114,6 +1163,12 @@
         } catch (err) {
           console.error('Startup error', err)
           log(`Startup error: ${err.message || err}`)
+
+          if (autoReconnect) {
+            scheduleWebSocketReconnect('Reconnect attempt failed')
+          }
+        } finally {
+          isStarting = false
         }
       }
 
