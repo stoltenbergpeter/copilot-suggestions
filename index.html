@@ -214,6 +214,38 @@
         font-weight: 700;
       }
 
+      .call-state {
+        align-items: center;
+        display: inline-flex;
+        gap: 6px;
+      }
+
+      .state-indicator {
+        align-items: center;
+        border-radius: 999px;
+        display: inline-flex;
+        font-weight: 700;
+        justify-content: center;
+        min-height: 18px;
+        min-width: 18px;
+      }
+
+      .state-indicator.connected {
+        background: #dcfae6;
+        color: #067647;
+      }
+
+      .state-indicator.alerting {
+        background: #fef0c7;
+        color: #b54708;
+      }
+
+      .state-indicator.disconnected,
+      .state-indicator.wrapup {
+        background: #fee4e2;
+        color: #b42318;
+      }
+
       pre {
         background: #0f172a;
         color: #dbe7ff;
@@ -547,6 +579,66 @@
           .join('\n')
       }
 
+      function getParticipantUserId(participant) {
+        return participant?.user?.id || participant?.userId || participant?.user?.userId || participant?.user?.guid || null
+      }
+
+      function getAgentParticipantForCurrentUser(eventBody) {
+        const participants = Array.isArray(eventBody?.participants) ? eventBody.participants : []
+        return participants.find((participant) => {
+          const purpose = String(participant?.purpose || '').toLowerCase()
+          return purpose === 'agent' && getParticipantUserId(participant) === userId
+        })
+      }
+
+      function getSessionMediaType(session) {
+        return String(session?.mediaType || session?.mediaTypeName || session?.type || '').toLowerCase()
+      }
+
+      function isCallSession(session) {
+        const mediaType = getSessionMediaType(session)
+        return !mediaType || mediaType === 'voice' || mediaType === 'call' || mediaType === 'callback'
+      }
+
+      function extractAgentCallState(eventBody) {
+        const agentParticipant = getAgentParticipantForCurrentUser(eventBody)
+        if (!agentParticipant) return null
+
+        const sessions = Array.isArray(agentParticipant.sessions) ? agentParticipant.sessions.filter(isCallSession) : []
+        const activeSession = sessions.find((session) => session.state && session.state !== 'disconnected') || sessions[0]
+        const state = activeSession?.state || agentParticipant.state || null
+
+        return state
+          ? {
+              state,
+              sessionId: activeSession?.id || activeSession?.sessionId || activeSession?.communicationId || null
+            }
+          : null
+      }
+
+      function extractAgentAfterCallWork(eventBody) {
+        const agentParticipant = getAgentParticipantForCurrentUser(eventBody)
+        if (!agentParticipant) return null
+
+        const candidates = []
+        if (agentParticipant.afterCallWork) candidates.push(agentParticipant.afterCallWork)
+
+        if (Array.isArray(agentParticipant.sessions)) {
+          agentParticipant.sessions.forEach((session) => {
+            if (session?.afterCallWork) candidates.push(session.afterCallWork)
+          })
+        }
+
+        const acw = candidates.find((item) => item?.state === 'pending') || candidates.find((item) => item?.state === 'complete') || candidates[0]
+        return acw
+          ? {
+              state: acw.state || 'unknown',
+              startTime: acw.startTime || null,
+              endTime: acw.endTime || null
+            }
+          : null
+      }
+
       function createMetadataAccumulator() {
         return {
           queueNames: new Set(),
@@ -621,12 +713,17 @@
 
       function extractConversationMetadata(details) {
         const metadata = collectConversationMetadata(details?.eventBody)
+        const agentCallState = extractAgentCallState(details?.eventBody)
+        const afterCallWork = extractAgentAfterCallWork(details?.eventBody)
+
         return {
           queueNames: Array.from(metadata.queueNames),
           customerAddresses: Array.from(metadata.customerAddresses),
           acdNames: Array.from(metadata.acdNames),
           routingPriorities: Array.from(metadata.routingPriorities),
-          attributes: metadata.attributes
+          attributes: metadata.attributes,
+          agentCallState,
+          afterCallWork
         }
       }
 
@@ -652,11 +749,37 @@
           customerAddresses: uniqueValues([...(existing.customerAddresses || []), ...(incoming.customerAddresses || [])]),
           acdNames: uniqueValues([...(existing.acdNames || []), ...(incoming.acdNames || [])]),
           routingPriorities: uniqueValues([...(existing.routingPriorities || []), ...(incoming.routingPriorities || [])]),
-          attributes: uniqueAttributeObjects([...(existing.attributes || []), ...(incoming.attributes || [])])
+          attributes: uniqueAttributeObjects([...(existing.attributes || []), ...(incoming.attributes || [])]),
+          agentCallState: incoming.agentCallState || existing.agentCallState || null,
+          afterCallWork: incoming.afterCallWork || existing.afterCallWork || null
         }
 
         conversationMetadataById.set(conversationId, merged)
         return merged
+      }
+
+      function getStateIndicatorClass(state) {
+        const normalized = String(state || '').toLowerCase()
+        if (normalized === 'connected') return 'connected'
+        if (normalized === 'alerting' || normalized === 'offering') return 'alerting'
+        if (normalized === 'disconnected') return 'disconnected'
+        if (normalized === 'wrapup' || normalized === 'acw') return 'wrapup'
+        return ''
+      }
+
+      function getStateIndicatorLabel(state) {
+        const normalized = String(state || '').toLowerCase()
+        if (normalized === 'connected') return '✓'
+        if (normalized === 'alerting' || normalized === 'offering') return '!'
+        if (normalized === 'disconnected') return 'x'
+        if (normalized === 'wrapup' || normalized === 'acw') return '...'
+        return '?'
+      }
+
+      function formatTimestamp(value) {
+        if (!value) return '-'
+        const date = new Date(value)
+        return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
       }
 
       function renderConversationMetadata(metadata) {
@@ -667,6 +790,28 @@
         const acdNames = metadata.acdNames || []
         const routingPriorities = metadata.routingPriorities || []
         const attributes = metadata.attributes || []
+        const agentCallState = metadata.agentCallState
+        const afterCallWork = metadata.afterCallWork
+        const stateClass = getStateIndicatorClass(agentCallState?.state)
+        const callStateMarkup = agentCallState?.state
+          ? `
+            <div class="row">
+              <span class="label">Agent Call State</span>
+              <span class="mono call-state">
+                <span class="state-indicator ${escapeHtml(stateClass)}">${escapeHtml(getStateIndicatorLabel(agentCallState.state))}</span>
+                ${escapeHtml(agentCallState.state)}
+              </span>
+            </div>
+          `
+          : ''
+        const acwMarkup = afterCallWork?.state
+          ? `
+            <div class="row">
+              <span class="label">After Call Work</span>
+              <span class="mono">${escapeHtml(afterCallWork.state)} (${escapeHtml(formatTimestamp(afterCallWork.startTime))}${afterCallWork.endTime ? ` - ${escapeHtml(formatTimestamp(afterCallWork.endTime))}` : ''})</span>
+            </div>
+          `
+          : ''
         const customerMarkup = customerAddresses.length
           ? `<div class="row"><span class="label">Customer Address</span><span class="mono">${escapeHtml(customerAddresses.join(', '))}</span></div>`
           : ''
@@ -686,7 +831,7 @@
           `
           : ''
 
-        return customerMarkup + acdMarkup + queueMarkup + priorityMarkup + attributesMarkup
+        return callStateMarkup + acwMarkup + customerMarkup + acdMarkup + queueMarkup + priorityMarkup + attributesMarkup
       }
 
       function formatHoldDuration(durationMs) {
@@ -949,6 +1094,72 @@
         log(`Subscribed to ${uniqueTopics.length} topic(s)`)
       }
 
+      function getConversationTopics(conversationId) {
+        return conversationTopicSuffixes.map((suffix) => `v2.conversations.${conversationId}.${suffix}`)
+      }
+
+      async function replaceChannelSubscriptions() {
+        const subscriptions = Array.from(subscribedTopics).map((topic) => ({ id: topic }))
+
+        if (typeof napi.putNotificationsChannelSubscriptions === 'function') {
+          await napi.putNotificationsChannelSubscriptions(channelId, subscriptions)
+          return true
+        }
+
+        return false
+      }
+
+      async function deleteTopicSubscription(topic) {
+        const methodNames = [
+          'deleteNotificationsChannelSubscriptionsTopicId',
+          'deleteNotificationsChannelSubscription',
+          'deleteNotificationsChannelSubscriptionsTopic'
+        ]
+
+        for (const methodName of methodNames) {
+          if (typeof napi[methodName] === 'function') {
+            await napi[methodName](channelId, topic)
+            return true
+          }
+        }
+
+        return false
+      }
+
+      async function stopTrackingConversation(conversationId, reason) {
+        if (!trackedConversationIds.has(conversationId)) return
+
+        const topics = getConversationTopics(conversationId)
+        topics.forEach((topic) => subscribedTopics.delete(topic))
+        trackedConversationIds.delete(conversationId)
+        conversationHoldStarts.delete(conversationId)
+        syncHoldTimerInterval()
+        updateHoldTimerDisplay(conversationId)
+        updateMetrics()
+
+        try {
+          const replaced = await replaceChannelSubscriptions()
+          if (replaced) {
+            log(`Stopped conversation subscriptions for ${conversationId}: ${reason}`)
+            return
+          }
+
+          let deletedAnyTopic = false
+          for (const topic of topics) {
+            deletedAnyTopic = (await deleteTopicSubscription(topic)) || deletedAnyTopic
+          }
+
+          if (deletedAnyTopic) {
+            log(`Deleted conversation topic subscriptions for ${conversationId}: ${reason}`)
+          } else {
+            log(`Stopped tracking ${conversationId} locally, but this SDK did not expose subscription replacement`)
+          }
+        } catch (err) {
+          console.error('Subscription cleanup error', err)
+          log(`Subscription cleanup error for ${conversationId}: ${err.message || err}`)
+        }
+      }
+
       async function subscribeToUserConversations() {
         const topics = [
           `v2.users.${userId}.conversations`,
@@ -959,12 +1170,16 @@
       }
 
       async function subscribeToConversationSuggestions(conversationId, metadata = null) {
-        const topics = conversationTopicSuffixes.map((suffix) => `v2.conversations.${conversationId}.${suffix}`)
+        const topics = getConversationTopics(conversationId)
         await subscribeTopics(topics)
         trackedConversationIds.add(conversationId)
         renderConversationCard(conversationId, 'user conversation notification', metadata)
         updateMetrics()
         log(`Tracking conversation ${conversationId} suggestion and transcription topics`)
+      }
+
+      function isAfterCallWorkComplete(metadata) {
+        return String(metadata?.afterCallWork?.state || '').toLowerCase() === 'complete'
       }
 
       function extractConversationIdsFromConversationEvent(details) {
@@ -1017,10 +1232,14 @@
           for (const conversationId of conversationIds) {
             updateConversationHoldState(conversationId, details)
 
-            if (!trackedConversationIds.has(conversationId)) {
+            if (!trackedConversationIds.has(conversationId) && !isAfterCallWorkComplete(conversationMetadata)) {
               await subscribeToConversationSuggestions(conversationId, conversationMetadata)
             } else {
               renderConversationCard(conversationId, details.topicName, conversationMetadata)
+            }
+
+            if (isAfterCallWorkComplete(conversationMetadata)) {
+              await stopTrackingConversation(conversationId, 'after-call work complete')
             }
           }
           return
