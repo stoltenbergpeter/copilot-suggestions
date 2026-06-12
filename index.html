@@ -591,27 +591,36 @@
         })
       }
 
-      function getSessionMediaType(session) {
-        return String(session?.mediaType || session?.mediaTypeName || session?.type || '').toLowerCase()
+      function getCommunicationMediaType(communication) {
+        return String(communication?.mediaType || communication?.mediaTypeName || communication?.type || '').toLowerCase()
       }
 
-      function isCallSession(session) {
-        const mediaType = getSessionMediaType(session)
+      function isCallCommunication(communication) {
+        const mediaType = getCommunicationMediaType(communication)
         return !mediaType || mediaType === 'voice' || mediaType === 'call' || mediaType === 'callback'
+      }
+
+      function getAgentCallCommunications(agentParticipant) {
+        return [
+          ...(Array.isArray(agentParticipant?.calls) ? agentParticipant.calls : []),
+          ...(Array.isArray(agentParticipant?.sessions) ? agentParticipant.sessions : [])
+        ].filter(isCallCommunication)
       }
 
       function extractAgentCallState(eventBody) {
         const agentParticipant = getAgentParticipantForCurrentUser(eventBody)
         if (!agentParticipant) return null
 
-        const sessions = Array.isArray(agentParticipant.sessions) ? agentParticipant.sessions.filter(isCallSession) : []
-        const activeSession = sessions.find((session) => session.state && session.state !== 'disconnected') || sessions[0]
-        const state = activeSession?.state || agentParticipant.state || null
+        const communications = getAgentCallCommunications(agentParticipant)
+        const activeCommunication =
+          communications.find((communication) => communication.state && communication.state !== 'terminated' && communication.state !== 'disconnected') ||
+          communications[0]
+        const state = activeCommunication?.state || agentParticipant.state || null
 
         return state
           ? {
               state,
-              sessionId: activeSession?.id || activeSession?.sessionId || activeSession?.communicationId || null
+              sessionId: activeCommunication?.id || activeCommunication?.sessionId || activeCommunication?.communicationId || null
             }
           : null
       }
@@ -623,11 +632,9 @@
         const candidates = []
         if (agentParticipant.afterCallWork) candidates.push(agentParticipant.afterCallWork)
 
-        if (Array.isArray(agentParticipant.sessions)) {
-          agentParticipant.sessions.forEach((session) => {
-            if (session?.afterCallWork) candidates.push(session.afterCallWork)
-          })
-        }
+        getAgentCallCommunications(agentParticipant).forEach((communication) => {
+          if (communication?.afterCallWork) candidates.push(communication.afterCallWork)
+        })
 
         const acw = candidates.find((item) => item?.state === 'pending') || candidates.find((item) => item?.state === 'complete') || candidates[0]
         return acw
@@ -762,7 +769,7 @@
         const normalized = String(state || '').toLowerCase()
         if (normalized === 'connected') return 'connected'
         if (normalized === 'alerting' || normalized === 'offering') return 'alerting'
-        if (normalized === 'disconnected') return 'disconnected'
+        if (normalized === 'disconnected' || normalized === 'terminated') return 'disconnected'
         if (normalized === 'wrapup' || normalized === 'acw') return 'wrapup'
         return ''
       }
@@ -771,7 +778,7 @@
         const normalized = String(state || '').toLowerCase()
         if (normalized === 'connected') return '✓'
         if (normalized === 'alerting' || normalized === 'offering') return '!'
-        if (normalized === 'disconnected') return 'x'
+        if (normalized === 'disconnected' || normalized === 'terminated') return 'x'
         if (normalized === 'wrapup' || normalized === 'acw') return '...'
         return '?'
       }
