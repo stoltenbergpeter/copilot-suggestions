@@ -455,6 +455,21 @@
         'suggestions.thirdpartyaction'
       ]
       const conversationTopicSuffixes = [...suggestionTopicSuffixes, 'transcription']
+      const transcriptCorrections = [
+        { pattern: /\bgenes[yi]s\b/gi, replacement: 'Genesys' },
+        { pattern: /\bgene sis\b/gi, replacement: 'Genesys' },
+        { pattern: /\bjenny sis\b/gi, replacement: 'Genesys' },
+        { pattern: /\bgenesis cloud\b/gi, replacement: 'Genesys Cloud' },
+        { pattern: /\bgenesys cloud\b/gi, replacement: 'Genesys Cloud' },
+        { pattern: /\bfranklin temple tin\b/gi, replacement: 'Franklin Templeton' },
+        { pattern: /\bfranklin templeton\b/gi, replacement: 'Franklin Templeton' },
+        { pattern: /\bfour oh one k\b/gi, replacement: '401k' },
+        { pattern: /\bfour zero one k\b/gi, replacement: '401k' },
+        { pattern: /\bsocial security number\b/gi, replacement: 'SSN' },
+        { pattern: /\btax i d\b/gi, replacement: 'Tax ID' },
+        { pattern: /\bafter call work\b/gi, replacement: 'After Call Work' },
+        { pattern: /\bwrap up\b/gi, replacement: 'wrap-up' }
+      ]
 
       function setText(id, value) {
         document.getElementById(id).textContent = value || '-'
@@ -1001,6 +1016,32 @@
         return JSON.stringify(channel)
       }
 
+      function sentenceCaseTranscript(text) {
+        return text.replace(/(^|[.!?]\s+)([a-z])/g, (_match, prefix, letter) => `${prefix}${letter.toUpperCase()}`)
+      }
+
+      function normalizeTranscriptText(text, isFinal) {
+        if (!text) return ''
+
+        let normalized = String(text)
+          .replace(/\s+/g, ' ')
+          .replace(/\s+([,.!?;:])/g, '$1')
+          .replace(/([,.!?;:])([^\s,.!?;:])/g, '$1 $2')
+          .trim()
+
+        transcriptCorrections.forEach(({ pattern, replacement }) => {
+          normalized = normalized.replace(pattern, replacement)
+        })
+
+        normalized = sentenceCaseTranscript(normalized)
+
+        if (isFinal && normalized && !/[.!?]$/.test(normalized)) {
+          normalized += '.'
+        }
+
+        return normalized
+      }
+
       function extractTranscriptLines(eventBody) {
         if (!Array.isArray(eventBody?.transcripts)) return []
 
@@ -1012,7 +1053,8 @@
 
             const finality = transcript.isFinal ? 'final' : 'partial'
             const channel = getTranscriptChannelLabel(transcript.channel)
-            return `[${finality} | ${channel}] ${text}`
+            const normalizedText = normalizeTranscriptText(text, transcript.isFinal)
+            return `[${finality} | ${channel}] ${normalizedText}`
           })
           .filter(Boolean)
       }
