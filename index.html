@@ -5,7 +5,7 @@
     <meta name="robots" content="noindex" />
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <title>Headless CRM Assist Workspace</title>
+    <title>Genesys Copilot Conversation Monitor</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <link
@@ -246,222 +246,6 @@
         color: #b42318;
       }
 
-      .concept-workspace {
-        margin-bottom: 12px;
-      }
-
-      .section-header {
-        align-items: flex-end;
-        display: flex;
-        gap: 12px;
-        justify-content: space-between;
-        margin: 0 0 10px 0;
-      }
-
-      .section-header h2 {
-        font-size: 17px;
-        margin: 0;
-      }
-
-      .section-header p {
-        color: var(--muted);
-        font-size: 12px;
-        line-height: 1.35;
-        margin: 4px 0 0 0;
-        max-width: 760px;
-      }
-
-      .concept-grid {
-        display: grid;
-        gap: 10px;
-        grid-template-columns: 320px minmax(420px, 1fr) 420px;
-      }
-
-      .concept-panel,
-      .suggestion-card,
-      .action-card,
-      .signal-step {
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        box-shadow: var(--shadow);
-      }
-
-      .concept-panel {
-        padding: 12px;
-      }
-
-      .concept-panel h3 {
-        font-size: 14px;
-        margin: 0 0 8px 0;
-      }
-
-      .profile-name {
-        font-size: 22px;
-        font-weight: 700;
-        line-height: 1.1;
-        margin: 0;
-      }
-
-      .profile-subtitle {
-        color: var(--muted);
-        font-size: 12px;
-        margin: 4px 0 0 0;
-      }
-
-      .profile-facts {
-        display: grid;
-        gap: 7px;
-        margin-top: 12px;
-      }
-
-      .fact-row {
-        display: flex;
-        justify-content: space-between;
-        gap: 10px;
-      }
-
-      .fact-row span:last-child {
-        font-weight: 700;
-        text-align: right;
-      }
-
-      .signal-flow {
-        display: grid;
-        gap: 8px;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        margin-top: 10px;
-      }
-
-      .signal-step {
-        padding: 9px;
-      }
-
-      .signal-step strong {
-        display: block;
-        font-size: 12px;
-        margin-bottom: 4px;
-      }
-
-      .live-cue {
-        background: #f0f9ff;
-        border: 1px solid #bae6fd;
-        border-radius: 8px;
-        color: #0c4a6e;
-        line-height: 1.4;
-        margin-top: 10px;
-        padding: 10px;
-      }
-
-      .suggestions-list,
-      .actions-list {
-        display: grid;
-        gap: 8px;
-      }
-
-      .suggestion-card,
-      .action-card {
-        padding: 10px;
-      }
-
-      .suggestion-card {
-        border-left: 4px solid #0e9384;
-      }
-
-      .suggestion-card.seismic {
-        border-left-color: #7a5af8;
-      }
-
-      .suggestion-card.crm {
-        border-left-color: #2970ff;
-      }
-
-      .suggestion-card.compliance {
-        border-left-color: #f79009;
-      }
-
-      .suggestion-topline,
-      .action-topline {
-        align-items: flex-start;
-        display: flex;
-        gap: 10px;
-        justify-content: space-between;
-      }
-
-      .suggestion-title,
-      .action-title {
-        font-weight: 700;
-        line-height: 1.25;
-      }
-
-      .source-badge,
-      .confidence-badge {
-        border-radius: 999px;
-        font-size: 10px;
-        line-height: 1.2;
-        padding: 4px 7px;
-        white-space: nowrap;
-      }
-
-      .source-badge {
-        background: #eef3fb;
-        color: #29456b;
-      }
-
-      .confidence-badge {
-        background: #ecfdf3;
-        color: #067647;
-      }
-
-      .suggestion-body,
-      .action-body {
-        color: var(--muted);
-        font-size: 12px;
-        line-height: 1.35;
-        margin: 7px 0 0 0;
-      }
-
-      .action-card.selected {
-        border-color: #2970ff;
-        box-shadow: 0 0 0 2px rgba(41, 112, 255, 0.12), var(--shadow);
-      }
-
-      .email-preview {
-        background: #fbfcfe;
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        margin-top: 10px;
-        padding: 10px;
-      }
-
-      .email-preview h4 {
-        font-size: 13px;
-        margin: 0 0 8px 0;
-      }
-
-      .email-preview pre {
-        background: #172033;
-        max-height: 260px;
-      }
-
-      .plain-action {
-        background: #ffffff;
-        border: 1px solid #b8c7dd;
-        border-radius: 6px;
-        color: #29456b;
-        cursor: pointer;
-        font-size: 12px;
-        font-weight: 700;
-        min-height: 30px;
-        padding: 6px 9px;
-      }
-
-      .plain-action.primary {
-        background: #2970ff;
-        border-color: #2970ff;
-        color: #ffffff;
-      }
-
       pre {
         background: #0f172a;
         color: #dbe7ff;
@@ -529,13 +313,6 @@
           grid-template-columns: repeat(2, minmax(160px, 1fr));
         }
 
-        .concept-grid {
-          grid-template-columns: 1fr;
-        }
-
-        .signal-flow {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
       }
 
       @media (max-width: 700px) {
@@ -551,26 +328,16 @@
           font-size: 18px;
         }
 
-        .section-header,
-        .suggestion-topline,
-        .action-topline {
-          align-items: flex-start;
-          flex-direction: column;
-        }
-
-        .signal-flow {
-          grid-template-columns: 1fr;
-        }
       }
     </style>
   </head>
   <body>
     <div class="page">
       <section class="hero">
-        <h1>Headless CRM Assist Workspace</h1>
+        <h1>Genesys Copilot Conversation Monitor</h1>
         <p>
-          Uses phone-system signals, live transcript events, and content recommendations to illustrate how a headless CRM layer
-          can guide the agent during the call and prepare follow-up actions after wrap-up.
+          Subscribes to the current user's conversations and summaries, then dynamically subscribes to Copilot suggestion topics
+          for each active conversation and renders each event payload in stacked containers from newest to oldest.
         </p>
       </section>
 
@@ -611,61 +378,6 @@
         <div class="card">
           <div class="label">Captured Events</div>
           <div id="eventCountMetric" class="metric">0</div>
-        </div>
-      </section>
-
-      <section class="concept-workspace">
-        <div class="section-header">
-          <div>
-            <h2>Headless CRM Assist Workspace</h2>
-            <p>
-              A concept layer that listens to the phone system, enriches the call with client context, recommends Seismic
-              content in real time, and prepares follow-up work after wrap-up.
-            </p>
-          </div>
-          <span class="pill">Concept mode</span>
-        </div>
-
-        <div class="concept-grid">
-          <div class="concept-panel">
-            <h3>Client Intelligence</h3>
-            <p class="profile-name">Peter Doe</p>
-            <p class="profile-subtitle">Matched by ANI · VIP household · Retirement services</p>
-            <div class="profile-facts">
-              <div class="fact-row"><span class="label">Intent</span><span>Rollover guidance</span></div>
-              <div class="fact-row"><span class="label">Relationship</span><span>Shareholder</span></div>
-              <div class="fact-row"><span class="label">ANI</span><span class="mono">+1 559 492 9633</span></div>
-              <div class="fact-row"><span class="label">Address</span><span>Clovis, CA</span></div>
-              <div class="fact-row"><span class="label">Risk Signals</span><span>Tax ID mismatch</span></div>
-            </div>
-
-            <div class="live-cue">
-              <div class="label">Live Conversation Cue</div>
-              <div id="conceptLiveCue">Caller is asking about moving retirement assets and needs forms after the call.</div>
-            </div>
-          </div>
-
-          <div class="concept-panel">
-            <h3>Real-Time Suggestions</h3>
-            <div class="signal-flow">
-              <div class="signal-step"><strong>Phone Signal</strong><span class="muted">ANI, queue, hold, ACW, transcript</span></div>
-              <div class="signal-step"><strong>Client Context</strong><span class="muted">Attributes, CRM profile, household flags</span></div>
-              <div class="signal-step"><strong>Content Layer</strong><span class="muted">Seismic, knowledge, compliance</span></div>
-              <div class="signal-step"><strong>Automation</strong><span class="muted">Tasks, emails, CRM notes</span></div>
-            </div>
-            <div id="conceptSuggestions" class="suggestions-list" style="margin-top: 10px;"></div>
-          </div>
-
-          <div class="concept-panel">
-            <h3>After-Call Actions</h3>
-            <div id="conceptActions" class="actions-list"></div>
-            <div class="email-preview">
-              <h4 id="emailPreviewTitle">Email Preview</h4>
-              <div class="row"><span class="label">To</span><span id="emailPreviewTo" class="mono"></span></div>
-              <div class="row"><span class="label">Subject</span><span id="emailPreviewSubject" class="mono"></span></div>
-              <pre id="emailPreviewBody"></pre>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -760,144 +472,9 @@
         { pattern: /\bafter call work\b/gi, replacement: 'After Call Work' },
         { pattern: /\bwrap up\b/gi, replacement: 'wrap-up' }
       ]
-      const conceptSuggestions = [
-        {
-          id: 'seismic-rollover',
-          source: 'Seismic',
-          type: 'seismic',
-          title: 'Send retirement rollover overview',
-          confidence: '94%',
-          trigger: 'Detected: rollover, tax forms, transfer timeline',
-          body: 'Recommended content: Retirement rollover guide, transfer checklist, and advisor handoff one-pager.'
-        },
-        {
-          id: 'crm-address',
-          source: 'Headless CRM',
-          type: 'crm',
-          title: 'Confirm mailing address before forms',
-          confidence: '88%',
-          trigger: 'Client profile includes matched ANI and mailing address',
-          body: 'Use the phone signal and profile attributes to prefill address verification and reduce manual CRM lookups.'
-        },
-        {
-          id: 'knowledge-tax',
-          source: 'Knowledge',
-          type: 'knowledge',
-          title: 'Tax ID verification path',
-          confidence: '82%',
-          trigger: 'Detected: Tax ID / SSN mismatch language',
-          body: 'Surface the approved verification flow and avoid exposing sensitive identifiers in the follow-up email.'
-        },
-        {
-          id: 'compliance-disclosure',
-          source: 'Compliance',
-          type: 'compliance',
-          title: 'Include non-advice disclosure',
-          confidence: '79%',
-          trigger: 'Detected: guidance request for retirement assets',
-          body: 'Prepare the required disclosure language for educational material sent after the call.'
-        }
-      ]
-      const conceptEmailTemplates = [
-        {
-          id: 'rollover-followup',
-          title: 'Rollover Follow-Up',
-          to: 'peter.doe@example.com',
-          subject: 'Retirement rollover resources and next steps',
-          body:
-            'Hi Peter,\n\nThanks for speaking with us today. Based on our conversation, I attached the retirement rollover overview and a checklist of the information needed to continue.\n\nRecommended next steps:\n1. Review the rollover overview.\n2. Confirm your mailing address.\n3. Contact us when you are ready to begin the transfer process.\n\nPlease note that this information is educational and does not constitute tax or investment advice.\n\nBest,\nClient Services'
-        },
-        {
-          id: 'forms-packet',
-          title: 'Forms Packet',
-          to: 'peter.doe@example.com',
-          subject: 'Forms packet for your retirement account request',
-          body:
-            'Hi Peter,\n\nAs discussed, here is the forms packet related to your retirement account request. The packet includes instructions, required signatures, and return options.\n\nBefore submitting, please confirm that your address and contact information are current.\n\nBest,\nClient Services'
-        },
-        {
-          id: 'advisor-handoff',
-          title: 'Advisor Handoff',
-          to: 'advisor.team@example.com',
-          subject: 'Client handoff: Peter Doe rollover discussion',
-          body:
-            'Hello,\n\nPeter Doe called about retirement rollover options. Key signals from the conversation:\n- Interested in transfer timeline\n- Needs educational rollover material\n- Mailing address should be confirmed\n- Tax ID verification path may be needed\n\nPlease follow up with the appropriate guidance.\n\nBest,\nClient Services'
-        }
-      ]
 
       function setText(id, value) {
         document.getElementById(id).textContent = value || '-'
-      }
-
-      function renderConceptSuggestions() {
-        const container = document.getElementById('conceptSuggestions')
-        if (!container) return
-
-        container.innerHTML = conceptSuggestions
-          .map(
-            (suggestion) => `
-              <div class="suggestion-card ${escapeHtml(suggestion.type)}">
-                <div class="suggestion-topline">
-                  <div>
-                    <span class="source-badge">${escapeHtml(suggestion.source)}</span>
-                    <div class="suggestion-title" style="margin-top: 7px;">${escapeHtml(suggestion.title)}</div>
-                  </div>
-                  <span class="confidence-badge">${escapeHtml(suggestion.confidence)}</span>
-                </div>
-                <p class="suggestion-body">${escapeHtml(suggestion.body)}</p>
-                <div class="pill-row"><span class="pill">${escapeHtml(suggestion.trigger)}</span></div>
-              </div>
-            `
-          )
-          .join('')
-      }
-
-      function renderConceptActions(selectedTemplateId = conceptEmailTemplates[0]?.id) {
-        const container = document.getElementById('conceptActions')
-        if (!container) return
-
-        container.innerHTML = conceptEmailTemplates
-          .map(
-            (template) => `
-              <div class="action-card ${template.id === selectedTemplateId ? 'selected' : ''}">
-                <div class="action-topline">
-                  <div>
-                    <div class="action-title">${escapeHtml(template.title)}</div>
-                    <p class="action-body">${escapeHtml(template.subject)}</p>
-                  </div>
-                  <button class="plain-action ${template.id === selectedTemplateId ? 'primary' : ''}" data-template-id="${escapeHtml(template.id)}" type="button">Preview</button>
-                </div>
-              </div>
-            `
-          )
-          .join('')
-
-        container.querySelectorAll('[data-template-id]').forEach((button) => {
-          button.addEventListener('click', () => renderConceptActions(button.getAttribute('data-template-id')))
-        })
-
-        renderEmailPreview(selectedTemplateId)
-      }
-
-      function renderEmailPreview(templateId) {
-        const template = conceptEmailTemplates.find((item) => item.id === templateId) || conceptEmailTemplates[0]
-        if (!template) return
-
-        setText('emailPreviewTitle', template.title)
-        setText('emailPreviewTo', template.to)
-        setText('emailPreviewSubject', template.subject)
-        setText('emailPreviewBody', template.body)
-      }
-
-      function updateConceptLiveCueFromTranscript(transcriptLines) {
-        if (!transcriptLines.length) return
-        const latestLine = transcriptLines[transcriptLines.length - 1].replace(/^\[[^\]]+\]\s*/, '')
-        setText('conceptLiveCue', latestLine)
-      }
-
-      function renderConceptWorkspace() {
-        renderConceptSuggestions()
-        renderConceptActions()
       }
 
       function updateConnectionDisplay() {
@@ -1498,7 +1075,6 @@
 
         const payloadId = extractBestPayloadId(details.eventBody)
         const transcriptLines = extractTranscriptLines(details.eventBody)
-        if (eventType === 'transcription') updateConceptLiveCueFromTranscript(transcriptLines)
         const transcriptMarkup =
           eventType === 'transcription' && transcriptLines.length
             ? `
@@ -1878,7 +1454,6 @@
 
       window.addEventListener('load', () => {
         bindPageEvents()
-        renderConceptWorkspace()
         start()
       })
     </script>
