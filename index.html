@@ -86,6 +86,131 @@
         margin-bottom: 12px;
       }
 
+      .monitor-layout {
+        align-items: start;
+        display: grid;
+        gap: 12px;
+        grid-template-columns: minmax(0, 1fr) 380px;
+      }
+
+      .monitor-stream {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-width: 0;
+      }
+
+      .recommendations-panel {
+        position: sticky;
+        top: 12px;
+      }
+
+      .recommendation-list,
+      .intent-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .recommendation-card {
+        animation: recommendation-flash 900ms ease-out;
+        background: #fbfcff;
+        border: 1px solid var(--border);
+        border-left: 4px solid #2970ff;
+        border-radius: 8px;
+        padding: 10px;
+      }
+
+      .recommendation-card.selected {
+        background: #ecfdf3;
+        border-color: #75e0a7;
+        border-left-color: #12b76a;
+      }
+
+      .recommendation-topline {
+        align-items: flex-start;
+        display: flex;
+        gap: 8px;
+        justify-content: space-between;
+      }
+
+      .recommendation-title {
+        font-size: 13px;
+        font-weight: 700;
+        line-height: 1.25;
+      }
+
+      .confidence {
+        background: #eef4ff;
+        border: 1px solid #c7d7fe;
+        border-radius: 999px;
+        color: #1849a9;
+        flex: 0 0 auto;
+        font-size: 10px;
+        font-weight: 700;
+        line-height: 1;
+        padding: 5px 7px;
+      }
+
+      .tag-button {
+        appearance: none;
+        background: #ffffff;
+        border: 1px solid #b2ccff;
+        border-radius: 8px;
+        color: #1849a9;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.2;
+        padding: 8px 10px;
+        text-align: left;
+        width: 100%;
+      }
+
+      .tag-button:hover {
+        background: #eff4ff;
+      }
+
+      .tag-button.selected {
+        background: #067647;
+        border-color: #067647;
+        color: #ffffff;
+      }
+
+      .evidence {
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.35;
+        margin-top: 8px;
+      }
+
+      .product-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+      }
+
+      .product-chip {
+        background: #f8f9fc;
+        border: 1px solid #d0d5dd;
+        border-radius: 999px;
+        color: #344054;
+        font-size: 10px;
+        line-height: 1.2;
+        padding: 4px 7px;
+      }
+
+      @keyframes recommendation-flash {
+        0% {
+          box-shadow: 0 0 0 0 rgba(41, 112, 255, 0.35);
+        }
+
+        100% {
+          box-shadow: 0 0 0 9px rgba(41, 112, 255, 0);
+        }
+      }
+
       .conversations-grid,
       .events-grid {
         display: flex;
@@ -309,6 +434,14 @@
           grid-template-columns: 1fr;
         }
 
+        .monitor-layout {
+          grid-template-columns: 1fr;
+        }
+
+        .recommendations-panel {
+          position: static;
+        }
+
         .status-grid {
           grid-template-columns: repeat(2, minmax(160px, 1fr));
         }
@@ -381,19 +514,32 @@
         </div>
       </section>
 
-      <section>
-        <div class="card">
-          <h2>Tracked Conversations</h2>
-          <div id="conversationsContainer" class="conversations-grid"></div>
-        </div>
-      </section>
+      <div class="monitor-layout">
+        <div class="monitor-stream">
+          <section>
+            <div class="card">
+              <h2>Tracked Conversations</h2>
+              <div id="conversationsContainer" class="conversations-grid"></div>
+            </div>
+          </section>
 
-      <section style="margin-top: 12px;">
-        <div class="card">
-          <h2>Suggestion Events</h2>
-          <div id="eventsContainer" class="events-grid"></div>
+          <section>
+            <div class="card">
+              <h2>Suggestion Events</h2>
+              <div id="eventsContainer" class="events-grid"></div>
+            </div>
+          </section>
         </div>
-      </section>
+
+        <aside class="card recommendations-panel">
+          <h2>Recommended Tags</h2>
+          <div class="row"><span class="label">Active Conversation</span><span id="recommendationConversation" class="mono">-</span></div>
+          <div class="row"><span class="label">Utterances</span><span id="recommendationUtteranceCount" class="mono">0</span></div>
+          <div id="recommendationsContainer" class="recommendation-list">
+            <div class="empty-state">Transcript recommendations will appear here.</div>
+          </div>
+        </aside>
+      </div>
     </div>
 
     <script>
@@ -443,6 +589,9 @@
       const subscribedTopics = new Set()
       const conversationMetadataById = new Map()
       const conversationHoldStarts = new Map()
+      const transcriptHistoryByConversation = new Map()
+      const selectedTagsByConversation = new Map()
+      let activeRecommendationConversationId = null
       let holdTimerInterval = null
       let reconnectTimer = null
       let reconnectAttempt = 0
@@ -471,6 +620,92 @@
         { pattern: /\btax i d\b/gi, replacement: 'Tax ID' },
         { pattern: /\bafter call work\b/gi, replacement: 'After Call Work' },
         { pattern: /\bwrap up\b/gi, replacement: 'wrap-up' }
+      ]
+      const recommendationRules = [
+        {
+          tag: 'Market Leader Follow Up Scheduled',
+          intent: 'Market Leader follow up appointment scheduled',
+          keywords: ['market leader', 'regional leader', 'branch leader', 'leader follow up', 'market manager'],
+          contextKeywords: ['appointment', 'scheduled', 'calendar', 'follow up', 'meeting'],
+          products: ['Market Leader Follow Up', 'Advisor Follow-Up Workflow']
+        },
+        {
+          tag: 'Scheduled Appointment',
+          intent: 'Follow up appointment scheduled for self',
+          keywords: ['appointment', 'scheduled', 'calendar', 'book a meeting', 'set up time', 'follow up', 'meet again'],
+          contextKeywords: ['tomorrow', 'next week', 'available', 'confirmed', 'send invite'],
+          products: ['Appointment Follow-Up', 'Advisor Calendar Task']
+        },
+        {
+          tag: 'Portfolio Solution Services',
+          intent: 'Portfolio construction, comparison, or analysis tools',
+          keywords: [
+            'hypo',
+            'hypothetical',
+            'morningstar',
+            'comparison',
+            'pcs',
+            'comp analysis',
+            'pat tool',
+            'sma pitchbook',
+            'pitchbook',
+            'muni review',
+            'portfolio solution'
+          ],
+          contextKeywords: ['analysis', 'allocation', 'proposal', 'compare', 'review'],
+          products: ['Hypo Tool', 'Morningstar Comparison', 'PCS Team', 'PAT Tool', 'SMA Pitchbooks', 'Muni Reviews']
+        },
+        {
+          tag: 'Models',
+          intent: 'Model portfolio conversation',
+          keywords: ['model', 'models', 'model portfolio', 'platform model', 'strategist model'],
+          contextKeywords: ['allocation', 'firm', 'proposal', 'rebalance', 'portfolio'],
+          products: ['Model Portfolios', 'Model Comparison']
+        },
+        {
+          tag: 'Alternatives',
+          intent: 'Alternative investment conversation',
+          keywords: ['alternative', 'alternatives', 'alts', 'private credit', 'private equity', 'hedge', 'real estate', 'interval fund', 'liquid alt'],
+          contextKeywords: ['income', 'diversification', 'illiquid', 'accredited', 'non correlated'],
+          products: ['Alternative Investments', 'Private Markets', 'Liquid Alternatives']
+        },
+        {
+          tag: 'DCIO',
+          intent: 'Defined contribution investment only conversation',
+          keywords: ['dcio', 'defined contribution', '401k', 'retirement plan', 'plan sponsor', 'recordkeeper', 'target date'],
+          contextKeywords: ['participant', 'lineup', 'qualified plan', 'retirement', 'fiduciary'],
+          products: ['DCIO', 'Target Date', 'Retirement Plan Resources']
+        },
+        {
+          tag: 'OSAM - CANVAS',
+          intent: 'Canvas or custom indexing conversation',
+          keywords: ['canvas', 'osam', 'custom indexing', 'direct indexing', 'tax transition', 'tax overlay'],
+          contextKeywords: ['personalized', 'tax loss', 'restriction', 'transition', 'separately managed'],
+          products: ['OSAM CANVAS', 'Direct Indexing', 'Tax Transition Review']
+        },
+        {
+          tag: 'Service/Operations',
+          intent: 'Service or operational request',
+          keywords: [
+            'service',
+            'operations',
+            'paperwork',
+            'forms',
+            'transfer',
+            'address change',
+            'beneficiary',
+            'distribution',
+            'statement',
+            'tax id',
+            'ssn',
+            'password',
+            'account access',
+            'wire',
+            'check status'
+          ],
+          contextKeywords: ['account', 'request', 'process', 'status', 'help', 'issue'],
+          products: ['Service Case', 'Operational Follow-Up', 'Forms Packet']
+        }
       ]
 
       function setText(id, value) {
@@ -570,6 +805,7 @@
       function clearEvents() {
         capturedEventCount = 0
         document.getElementById('eventsContainer').innerHTML = ''
+        resetRecommendations()
         updateMetrics()
         renderEmptyEvents()
         log('Cleared rendered events')
@@ -587,6 +823,161 @@
         if (!container.children.length) {
           container.innerHTML = '<div class="empty-state">No events captured yet.</div>'
         }
+      }
+
+      function renderEmptyRecommendations(message = 'Transcript recommendations will appear here.') {
+        const container = document.getElementById('recommendationsContainer')
+        if (!container) return
+
+        container.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`
+        setText('recommendationConversation', activeRecommendationConversationId || '-')
+        setText('recommendationUtteranceCount', '0')
+      }
+
+      function resetRecommendations() {
+        transcriptHistoryByConversation.clear()
+        selectedTagsByConversation.clear()
+        activeRecommendationConversationId = null
+        renderEmptyRecommendations()
+      }
+
+      function normalizeForMatching(text) {
+        return String(text || '')
+          .toLowerCase()
+          .replace(/[^\w\s-]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+      }
+
+      function findMatchedTerms(text, terms) {
+        const normalized = normalizeForMatching(text)
+        return terms.filter((term) => normalized.includes(normalizeForMatching(term)))
+      }
+
+      function getSelectedTags(conversationId) {
+        if (!selectedTagsByConversation.has(conversationId)) {
+          selectedTagsByConversation.set(conversationId, new Set())
+        }
+
+        return selectedTagsByConversation.get(conversationId)
+      }
+
+      function scoreRecommendationRule(rule, history) {
+        const recentText = history.slice(-4).map((entry) => entry.text).join(' ')
+        const fullText = history.map((entry) => entry.text).join(' ')
+        const recentKeywordMatches = findMatchedTerms(recentText, rule.keywords)
+        const fullKeywordMatches = findMatchedTerms(fullText, rule.keywords)
+        const contextMatches = findMatchedTerms(fullText, rule.contextKeywords)
+        const uniqueMatches = Array.from(new Set([...recentKeywordMatches, ...fullKeywordMatches, ...contextMatches]))
+
+        let score = recentKeywordMatches.length * 3 + fullKeywordMatches.length * 1.5 + contextMatches.length
+        if (recentKeywordMatches.length && contextMatches.length) score += 3
+        if (history.slice(-2).some((entry) => entry.isFinal) && recentKeywordMatches.length) score += 1
+
+        const confidence = Math.min(98, Math.round(42 + score * 7 + uniqueMatches.length * 2))
+
+        return {
+          ...rule,
+          score,
+          confidence,
+          evidence: uniqueMatches.slice(0, 6)
+        }
+      }
+
+      function buildRecommendations(conversationId) {
+        const history = transcriptHistoryByConversation.get(conversationId) || []
+        return recommendationRules
+          .map((rule) => scoreRecommendationRule(rule, history))
+          .filter((recommendation) => recommendation.score > 0)
+          .sort((left, right) => right.score - left.score || right.confidence - left.confidence)
+          .slice(0, 5)
+      }
+
+      function toggleRecommendedTag(conversationId, tag) {
+        const selectedTags = getSelectedTags(conversationId)
+        if (selectedTags.has(tag)) {
+          selectedTags.delete(tag)
+          log(`Removed recommended tag: ${tag}`)
+        } else {
+          selectedTags.add(tag)
+          log(`Selected recommended tag: ${tag}`)
+        }
+
+        renderRecommendations(conversationId)
+      }
+
+      function renderRecommendations(conversationId) {
+        const container = document.getElementById('recommendationsContainer')
+        if (!container) return
+
+        activeRecommendationConversationId = conversationId
+        const history = transcriptHistoryByConversation.get(conversationId) || []
+        const recommendations = buildRecommendations(conversationId)
+        const selectedTags = getSelectedTags(conversationId)
+
+        setText('recommendationConversation', conversationId || '-')
+        setText('recommendationUtteranceCount', String(history.length))
+
+        if (!recommendations.length) {
+          renderEmptyRecommendations('Listening for classifiable conversation topics.')
+          setText('recommendationConversation', conversationId || '-')
+          setText('recommendationUtteranceCount', String(history.length))
+          return
+        }
+
+        container.innerHTML = recommendations
+          .map((recommendation) => {
+            const selected = selectedTags.has(recommendation.tag)
+            const evidence = recommendation.evidence.length ? recommendation.evidence.join(', ') : 'Matched recent utterance context'
+            const products = recommendation.products
+              .map((product) => `<span class="product-chip">${escapeHtml(product)}</span>`)
+              .join('')
+
+            return `
+              <div class="recommendation-card ${selected ? 'selected' : ''}">
+                <div class="recommendation-topline">
+                  <div>
+                    <div class="label">Dynamics Topic</div>
+                    <div class="recommendation-title">${escapeHtml(recommendation.tag)}</div>
+                  </div>
+                  <span class="confidence">${escapeHtml(String(recommendation.confidence))}%</span>
+                </div>
+                <div class="evidence">${escapeHtml(recommendation.intent)}</div>
+                <div class="evidence">Matched: ${escapeHtml(evidence)}</div>
+                <div class="product-list">${products}</div>
+                <div style="margin-top: 8px;">
+                  <button class="tag-button ${selected ? 'selected' : ''}" data-tag="${escapeHtml(recommendation.tag)}" type="button">
+                    ${selected ? 'Selected' : 'Apply Tag'}
+                  </button>
+                </div>
+              </div>
+            `
+          })
+          .join('')
+
+        container.querySelectorAll('[data-tag]').forEach((button) => {
+          button.addEventListener('click', () => toggleRecommendedTag(conversationId, button.getAttribute('data-tag')))
+        })
+      }
+
+      function recordTranscriptEntries(conversationId, entries) {
+        if (!conversationId || conversationId === 'Unknown' || !entries.length) return
+
+        const history = transcriptHistoryByConversation.get(conversationId) || []
+        entries.forEach((entry) => {
+          const existingIndex = entry.utteranceId
+            ? history.findIndex((historyEntry) => historyEntry.utteranceId === entry.utteranceId)
+            : -1
+
+          if (existingIndex > -1) {
+            history[existingIndex] = entry
+          } else {
+            history.push(entry)
+          }
+        })
+
+        transcriptHistoryByConversation.set(conversationId, history.slice(-80))
+        renderRecommendations(conversationId)
       }
 
       function formatObjectEntries(value) {
@@ -1044,7 +1435,7 @@
         return normalized
       }
 
-      function extractTranscriptLines(eventBody) {
+      function extractTranscriptEntries(eventBody) {
         if (!Array.isArray(eventBody?.transcripts)) return []
 
         return eventBody.transcripts
@@ -1056,9 +1447,20 @@
             const finality = transcript.isFinal ? 'final' : 'partial'
             const channel = getTranscriptChannelLabel(transcript.channel)
             const normalizedText = normalizeTranscriptText(text, transcript.isFinal)
-            return `[${finality} | ${channel}] ${normalizedText}`
+            return {
+              utteranceId: transcript.utteranceId || `${eventBody?.conversationId || 'unknown'}-${channel}-${alternative?.offsetMs || 0}-${normalizedText}`,
+              text: normalizedText,
+              isFinal: Boolean(transcript.isFinal),
+              finality,
+              channel,
+              receivedAt: Date.now()
+            }
           })
           .filter(Boolean)
+      }
+
+      function extractTranscriptLines(eventBody) {
+        return extractTranscriptEntries(eventBody).map((entry) => `[${entry.finality} | ${entry.channel}] ${entry.text}`)
       }
 
       function renderEvent(details) {
@@ -1074,7 +1476,9 @@
           'Unknown'
 
         const payloadId = extractBestPayloadId(details.eventBody)
-        const transcriptLines = extractTranscriptLines(details.eventBody)
+        const transcriptEntries = extractTranscriptEntries(details.eventBody)
+        const transcriptLines = transcriptEntries.map((entry) => `[${entry.finality} | ${entry.channel}] ${entry.text}`)
+        if (eventType === 'transcription') recordTranscriptEntries(conversationId, transcriptEntries)
         const transcriptMarkup =
           eventType === 'transcription' && transcriptLines.length
             ? `
@@ -1184,6 +1588,12 @@
         topics.forEach((topic) => subscribedTopics.delete(topic))
         trackedConversationIds.delete(conversationId)
         conversationHoldStarts.delete(conversationId)
+        transcriptHistoryByConversation.delete(conversationId)
+        selectedTagsByConversation.delete(conversationId)
+        if (activeRecommendationConversationId === conversationId) {
+          activeRecommendationConversationId = null
+          renderEmptyRecommendations()
+        }
         syncHoldTimerInterval()
         updateHoldTimerDisplay(conversationId)
         updateMetrics()
@@ -1378,6 +1788,7 @@
 
           renderEmptyConversations()
           renderEmptyEvents()
+          renderEmptyRecommendations()
 
           if (!gc_region || !gc_clientId) {
             setFallbackLoginVisible(true)
@@ -1406,6 +1817,7 @@
             trackedConversationIds.clear()
             conversationMetadataById.clear()
             conversationHoldStarts.clear()
+            resetRecommendations()
             syncHoldTimerInterval()
             document.getElementById('conversationsContainer').innerHTML = ''
             document.getElementById('eventsContainer').innerHTML = ''
