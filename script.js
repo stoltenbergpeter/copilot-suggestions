@@ -48,10 +48,10 @@ function renderTranscriptEntries(entries) {
     emptyState.textContent = "Waiting for the conversation transcript...";
     transcript.append(emptyState);
   } else {
-    entries.forEach((entry) => transcript.append(createMessage(entry)));
+    [...entries].reverse().forEach((entry) => transcript.append(createMessage(entry)));
   }
   messageCount.textContent = `${entries.length} ${entries.length === 1 ? "message" : "messages"}`;
-  transcript.scrollTop = transcript.scrollHeight;
+  transcript.scrollTop = 0;
 }
 
 function createMessage(entry) {
