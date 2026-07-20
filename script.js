@@ -4,8 +4,21 @@ const intentPanel = document.querySelector("#intent-panel");
 const intentName = document.querySelector("#intent-name");
 const intentDetail = document.querySelector("#intent-detail");
 const intentAction = document.querySelector("#intent-action");
+const taskPanel = document.querySelector("#task-panel");
+const taskForm = document.querySelector("#task-form");
+const taskTitle = document.querySelector("#task-title");
+const taskDueDate = document.querySelector("#task-due-date");
+const taskPriority = document.querySelector("#task-priority");
+const taskOwner = document.querySelector("#task-owner");
+const taskNotes = document.querySelector("#task-notes");
+const taskIntent = document.querySelector("#task-intent");
+const taskConversation = document.querySelector("#task-conversation");
+const closeTask = document.querySelector("#close-task");
+const cancelTask = document.querySelector("#cancel-task");
 const summaryPanel = document.querySelector("#summary-panel");
 const summaryText = document.querySelector("#summary-text");
+const tagsPanel = document.querySelector("#tags-panel");
+const tagList = document.querySelector("#tag-list");
 const summaryLike = document.querySelector("#summary-like");
 const syncSummary = document.querySelector("#sync-summary");
 const notesEditor = document.querySelector("#notes-editor");
@@ -87,18 +100,74 @@ function renderIntentRecommendation(intent) {
   intentDetail.textContent = intent.detail || "A customer need was detected during the conversation.";
   intentAction.textContent = intent.action || "Create follow-up task";
   intentAction.disabled = false;
+  taskPanel.hidden = true;
   intentPanel.hidden = false;
   intentAction.classList.remove("flash");
   void intentAction.offsetWidth;
   intentAction.classList.add("flash");
 }
 
+function openFollowUpTask() {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  taskTitle.value = `Follow up: ${intentName.textContent}`;
+  taskDueDate.value = tomorrow.toISOString().slice(0, 10);
+  taskPriority.value = "Normal";
+  taskOwner.value = "";
+  taskNotes.value = [intentDetail.textContent, notesEditor.textContent.trim()].filter(Boolean).join("\n\n");
+  taskIntent.textContent = intentName.textContent;
+  taskConversation.textContent = activeConversationId || "Current conversation";
+  taskPanel.hidden = false;
+  taskTitle.focus();
+}
+
 function renderConversationSummary(summary) {
   if (!summary) return;
   summaryText.textContent = summary;
+  renderRecommendedTags(extractDynamicsTopics(summary));
   syncSummary.textContent = "Sync to activity";
   syncSummary.disabled = false;
   summaryPanel.hidden = false;
+}
+
+function extractDynamicsTopics(summary) {
+  const lines = String(summary).replace(/\r/g, "").split("\n");
+  const headingIndex = lines.findIndex((line) => /dynamics\s+topic(?:\(s\)|s)?\s*:/i.test(line));
+  if (headingIndex < 0) return [];
+
+  const headingLine = lines[headingIndex];
+  const afterColon = headingLine.slice(headingLine.indexOf(":") + 1).trim();
+  const topicLines = afterColon ? [afterColon] : [];
+
+  for (let index = headingIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index].trim();
+    if (!line) {
+      if (topicLines.length) break;
+      continue;
+    }
+    if (/^[A-Z][A-Za-z0-9 /&()'-]{2,}:\s*/.test(line) && !/^[-*]/.test(line)) break;
+    topicLines.push(line);
+  }
+
+  return [...new Set(
+    topicLines
+      .join(",")
+      .replace(/[*_`]/g, "")
+      .split(/[,;|]|\s+\/\s+|\n/)
+      .map((topic) => topic.replace(/^[-\u2022\d.)\s]+/, "").trim())
+      .filter(Boolean)
+  )];
+}
+
+function renderRecommendedTags(tags) {
+  tagList.replaceChildren();
+  tagsPanel.hidden = !tags.length;
+  tags.forEach((tag) => {
+    const chip = document.createElement("span");
+    chip.className = "recommended-tag";
+    chip.textContent = tag;
+    tagList.append(chip);
+  });
 }
 
 function getTranscriptChannelLabel(channel) {
@@ -243,7 +312,29 @@ async function connectToGenesys() {
   }
 }
 
-intentAction.addEventListener("click", () => {
+intentAction.addEventListener("click", openFollowUpTask);
+
+closeTask.addEventListener("click", () => {
+  taskPanel.hidden = true;
+});
+
+cancelTask.addEventListener("click", () => {
+  taskPanel.hidden = true;
+});
+
+taskForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const task = {
+    conversationId: activeConversationId,
+    intent: taskIntent.textContent,
+    title: taskTitle.value.trim(),
+    dueDate: taskDueDate.value,
+    priority: taskPriority.value,
+    owner: taskOwner.value.trim(),
+    notes: taskNotes.value.trim()
+  };
+  window.dispatchEvent(new CustomEvent("conversation-follow-up-task", { detail: task }));
+  taskPanel.hidden = true;
   intentAction.textContent = "Follow-up task created";
   intentAction.disabled = true;
   intentAction.classList.remove("flash");

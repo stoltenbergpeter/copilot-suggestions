@@ -28,6 +28,45 @@
           <button id="intent-action" class="recommended-action" type="button">Create follow-up task</button>
         </section>
 
+        <section id="task-panel" class="task-panel" aria-labelledby="task-heading" hidden>
+          <div class="task-heading">
+            <div>
+              <p class="eyebrow">Follow-up task</p>
+              <h3 id="task-heading">Create a task from this intent</h3>
+            </div>
+            <button id="close-task" class="close-task" type="button" aria-label="Close follow-up task">&#215;</button>
+          </div>
+          <form id="task-form">
+            <label class="field field-wide">Task title
+              <input id="task-title" name="title" type="text" required>
+            </label>
+            <label class="field">Due date
+              <input id="task-due-date" name="dueDate" type="date" required>
+            </label>
+            <label class="field">Priority
+              <select id="task-priority" name="priority">
+                <option>Normal</option>
+                <option>High</option>
+                <option>Low</option>
+              </select>
+            </label>
+            <label class="field field-wide">Owner
+              <input id="task-owner" name="owner" type="text" placeholder="Assign an owner">
+            </label>
+            <label class="field field-wide">Notes
+              <textarea id="task-notes" name="notes" rows="3" placeholder="Add context for the follow-up..."></textarea>
+            </label>
+            <div class="task-details">
+              <span>Intent: <strong id="task-intent"></strong></span>
+              <span>Conversation: <strong id="task-conversation"></strong></span>
+            </div>
+            <div class="task-actions">
+              <button id="cancel-task" class="secondary-button" type="button">Cancel</button>
+              <button class="sync-button" type="submit">Create follow-up task</button>
+            </div>
+          </form>
+        </section>
+
         <div id="transcript" class="transcript" aria-live="polite" aria-label="Conversation transcript"></div>
 
         <section class="notes-panel" aria-labelledby="notes-heading">
@@ -47,6 +86,10 @@
             <span class="summary-status">Generated</span>
           </div>
           <p id="summary-text" class="summary-text"></p>
+          <section id="tags-panel" class="tags-panel" aria-labelledby="tags-heading" hidden>
+            <p class="eyebrow" id="tags-heading">Recommended tags</p>
+            <div id="tag-list" class="tag-list"></div>
+          </section>
           <div class="summary-feedback">
             <span>Was this summary helpful?</span>
             <div class="summary-actions">
