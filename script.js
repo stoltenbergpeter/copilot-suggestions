@@ -1,14 +1,5 @@
-const sampleTranscript = [
-  { channel: "external", time: "10:25 AM", text: "Hi, I'm trying to find out why my last transfer is still pending." },
-  { channel: "internal", time: "10:25 AM", text: "I can help with that. Let me take a quick look at the transfer details for you." },
-  { channel: "external", time: "10:26 AM", text: "Thank you. It was sent yesterday afternoon." },
-  { channel: "internal", time: "10:27 AM", text: "I see it here. It's processing normally and should be complete by the end of today." },
-  { channel: "external", time: "10:28 AM", text: "Perfect, that's all I needed to know." }
-];
-
 const transcript = document.querySelector("#transcript");
 const messageCount = document.querySelector("#message-count");
-const demoButton = document.querySelector("#add-demo-message");
 const intentPanel = document.querySelector("#intent-panel");
 const intentName = document.querySelector("#intent-name");
 const intentDetail = document.querySelector("#intent-detail");
@@ -16,6 +7,8 @@ const intentAction = document.querySelector("#intent-action");
 const summaryPanel = document.querySelector("#summary-panel");
 const summaryText = document.querySelector("#summary-text");
 const summaryLike = document.querySelector("#summary-like");
+const syncSummary = document.querySelector("#sync-summary");
+const notesEditor = document.querySelector("#notes-editor");
 const connectionStatus = document.querySelector("#connection-status");
 const connectionLabel = document.querySelector("#connection-label");
 
@@ -49,7 +42,14 @@ function isAgentChannel(channel) {
 
 function renderTranscriptEntries(entries) {
   transcript.replaceChildren();
-  entries.forEach((entry) => transcript.append(createMessage(entry)));
+  if (!entries.length) {
+    const emptyState = document.createElement("p");
+    emptyState.className = "transcript-empty";
+    emptyState.textContent = "Waiting for the conversation transcript...";
+    transcript.append(emptyState);
+  } else {
+    entries.forEach((entry) => transcript.append(createMessage(entry)));
+  }
   messageCount.textContent = `${entries.length} ${entries.length === 1 ? "message" : "messages"}`;
   transcript.scrollTop = transcript.scrollHeight;
 }
@@ -96,6 +96,8 @@ function renderIntentRecommendation(intent) {
 function renderConversationSummary(summary) {
   if (!summary) return;
   summaryText.textContent = summary;
+  syncSummary.textContent = "Sync to activity";
+  syncSummary.disabled = false;
   summaryPanel.hidden = false;
 }
 
@@ -130,7 +132,20 @@ function updateTranscript(conversationId, entries) {
   });
   transcriptsByConversation.set(conversationId, history.slice(-100));
   activeConversationId = conversationId;
+  loadNotes();
   renderTranscriptEntries(transcriptsByConversation.get(conversationId));
+}
+
+function noteStorageKey() {
+  return `genesys-conversation-notes:${activeConversationId || "draft"}`;
+}
+
+function loadNotes() {
+  notesEditor.textContent = localStorage.getItem(noteStorageKey()) || "";
+}
+
+function saveNotes() {
+  localStorage.setItem(noteStorageKey(), notesEditor.textContent.trim());
 }
 
 function findFirstString(value, keys) {
@@ -198,8 +213,8 @@ async function handleNotification(event) {
 
 async function connectToGenesys() {
   if (!genesysConfig.region || !genesysConfig.clientId) {
-    setConnectionState("waiting", "Demo mode - add Genesys URL parameters to connect");
-    renderTranscriptEntries(sampleTranscript);
+    setConnectionState("waiting", "Add Genesys URL parameters to connect");
+    renderTranscriptEntries([]);
     return;
   }
   try {
@@ -221,7 +236,6 @@ async function connectToGenesys() {
     await subscribe([`v2.users.${user.id}.conversations`, `v2.users.${user.id}.conversations.summaries`]);
     const requestedConversationId = url.searchParams.get("gc_conversationId");
     if (requestedConversationId) await subscribeToConversation(requestedConversationId);
-    demoButton.hidden = true;
     setConnectionState("live", "Live - subscribed to Genesys Cloud");
   } catch (error) {
     console.error("Genesys Cloud connection error", error);
@@ -241,15 +255,22 @@ summaryLike.addEventListener("click", () => {
   summaryLike.querySelector("span").textContent = isHelpful ? "Helpful" : "Thanks";
 });
 
-demoButton.addEventListener("click", () => {
-  sampleTranscript.push({ channel: "internal", time: "Now", text: "You are welcome. Is there anything else I can help you with today?", isFinal: false });
-  renderTranscriptEntries(sampleTranscript);
-  renderIntentRecommendation({ name: "Transfer status", detail: "The customer is asking for an update on a pending transfer.", action: "Create follow-up task" });
-  renderConversationSummary("Jamie called about a pending transfer sent yesterday afternoon. The agent confirmed it is processing normally and is expected to complete by the end of today. No additional support was requested.");
-  demoButton.disabled = true;
-  demoButton.textContent = "Live update received";
+syncSummary.addEventListener("click", () => {
+  window.dispatchEvent(new CustomEvent("conversation-summary-sync", {
+    detail: { conversationId: activeConversationId, summary: summaryText.textContent }
+  }));
+  syncSummary.textContent = "Synced to activity";
+  syncSummary.disabled = true;
+});
+
+notesEditor.addEventListener("input", saveNotes);
+
+notesEditor.addEventListener("paste", (event) => {
+  event.preventDefault();
+  document.execCommand("insertText", false, event.clipboardData.getData("text/plain"));
 });
 
 window.renderIntentRecommendation = renderIntentRecommendation;
 window.renderConversationSummary = renderConversationSummary;
+loadNotes();
 window.addEventListener("load", connectToGenesys);

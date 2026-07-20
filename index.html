@@ -10,51 +10,33 @@
   </head>
   <body>
     <main class="app-shell">
-      <header class="page-header">
-        <div>
-          <p class="eyebrow">Live conversation</p>
-          <h1>Customer conversation</h1>
-          <p class="subtitle">A clear, real-time view of what the customer and agent are saying.</p>
-        </div>
+      <div class="connection-bar">
         <div id="connection-status" class="connection-status waiting" aria-live="polite">
           <span class="status-dot"></span>
           <span id="connection-label">Connecting to Genesys Cloud</span>
         </div>
-      </header>
+      </div>
 
-      <section class="conversation-card" aria-labelledby="conversation-heading">
-        <header class="conversation-header">
-          <div class="caller">
-            <div class="avatar avatar-customer" aria-hidden="true">JD</div>
-            <div>
-              <p class="eyebrow">Customer</p>
-              <h2 id="conversation-heading">Jamie Davis</h2>
-              <p class="call-detail">Account support call · Started 10:24 AM</p>
-            </div>
-          </div>
-          <div class="call-duration" aria-label="Call duration">
-            <span>Call duration</span>
-            <strong id="call-duration">04:32</strong>
-          </div>
-        </header>
-
-        <div class="conversation-legend" aria-label="Speaker legend">
-          <span><i class="legend-dot customer-dot"></i>Customer</span>
-          <span><i class="legend-dot agent-dot"></i>Agent</span>
-          <span class="transcript-note">Transcript updates as people speak</span>
-        </div>
-
+      <section class="conversation-card" aria-label="Live customer conversation">
         <section id="intent-panel" class="intent-panel" aria-live="polite" hidden>
           <div class="intent-icon" aria-hidden="true">&#10022;</div>
           <div class="intent-copy">
             <p class="eyebrow">Intent detected</p>
-            <h3 id="intent-name">Transfer status</h3>
-            <p id="intent-detail">The customer is asking for an update on a pending transfer.</p>
+            <h3 id="intent-name"></h3>
+            <p id="intent-detail"></p>
           </div>
           <button id="intent-action" class="recommended-action" type="button">Create follow-up task</button>
         </section>
 
         <div id="transcript" class="transcript" aria-live="polite" aria-label="Conversation transcript"></div>
+
+        <section class="notes-panel" aria-labelledby="notes-heading">
+          <div class="notes-heading">
+            <h3 id="notes-heading">Notes</h3>
+            <span>Saved locally</span>
+          </div>
+          <div id="notes-editor" class="notes-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Conversation notes" data-placeholder="Add notes for this conversation..."></div>
+        </section>
 
         <section id="summary-panel" class="summary-panel" aria-labelledby="summary-heading" hidden>
           <div class="summary-heading">
@@ -67,13 +49,15 @@
           <p id="summary-text" class="summary-text"></p>
           <div class="summary-feedback">
             <span>Was this summary helpful?</span>
-            <button id="summary-like" class="thumb-button" type="button" aria-pressed="false" aria-label="Mark summary as helpful">&#128077; <span>Helpful</span></button>
+            <div class="summary-actions">
+              <button id="summary-like" class="thumb-button" type="button" aria-pressed="false" aria-label="Mark summary as helpful">&#128077; <span>Helpful</span></button>
+              <button id="sync-summary" class="sync-button" type="button">Sync to activity</button>
+            </div>
           </div>
         </section>
 
         <footer class="conversation-footer">
           <span id="message-count">0 messages</span>
-          <button id="add-demo-message" type="button">Receive live update</button>
         </footer>
       </section>
     </main>
