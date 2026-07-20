@@ -35,6 +35,10 @@ h2 { margin-bottom: 3px; font-size: 1.05rem; letter-spacing: -.015em; }
 
 .connection-status { display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto; border: 1px solid #abefc6; border-radius: 99px; background: #ecfdf3; color: #067647; font-size: .82rem; font-weight: 700; padding: 7px 10px; }
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 3px #d1fadf; }
+.connection-status.waiting { border-color: #fedf89; background: #fffaeb; color: #b54708; }
+.connection-status.waiting .status-dot { background: #f79009; box-shadow: 0 0 0 3px #fef0c7; }
+.connection-status.error { border-color: #fecdca; background: #fef3f2; color: #b42318; }
+.connection-status.error .status-dot { background: #f04438; box-shadow: 0 0 0 3px #fee4e2; }
 
 .conversation-card { overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: var(--card); box-shadow: 0 12px 30px rgba(16, 24, 40, .08); }
 .conversation-header { display: flex; justify-content: space-between; gap: 16px; align-items: center; padding: 20px 24px; border-bottom: 1px solid var(--line); }

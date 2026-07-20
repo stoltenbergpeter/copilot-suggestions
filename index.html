@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Conversation monitor</title>
     <link rel="stylesheet" href="styles.css">
+    <script src="https://sdk-cdn.mypurecloud.com/javascript/latest/purecloud-platform-client-v2.min.js"></script>
     <script src="script.js" defer></script>
   </head>
   <body>
@@ -15,9 +16,9 @@
           <h1>Customer conversation</h1>
           <p class="subtitle">A clear, real-time view of what the customer and agent are saying.</p>
         </div>
-        <div class="connection-status" aria-label="Conversation is live">
+        <div id="connection-status" class="connection-status waiting" aria-live="polite">
           <span class="status-dot"></span>
-          Live
+          <span id="connection-label">Connecting to Genesys Cloud</span>
         </div>
       </header>
 
