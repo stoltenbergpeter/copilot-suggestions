@@ -24,6 +24,7 @@ const syncSummary = document.querySelector("#sync-summary");
 const notesEditor = document.querySelector("#notes-editor");
 const connectionStatus = document.querySelector("#connection-status");
 const connectionLabel = document.querySelector("#connection-label");
+const conversationCard = document.querySelector(".conversation-card");
 
 const url = new URL(window.location.href);
 const defaultGenesysRegion = "usw2.pure.cloud";
@@ -136,11 +137,68 @@ function openFollowUpTask() {
 
 function renderConversationSummary(summary) {
   if (!summary) return;
-  summaryText.textContent = summary;
+  conversationCard.prepend(summaryPanel);
+  renderMarkdown(summaryText, summary);
   renderRecommendedTags(extractDynamicsTopics(summary));
   syncSummary.textContent = "Sync to activity";
   syncSummary.disabled = false;
   summaryPanel.hidden = false;
+  summaryPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function appendInlineMarkdown(container, text) {
+  const pattern = /(\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*]+\*|_[^_]+_)/g;
+  let cursor = 0;
+  for (const match of text.matchAll(pattern)) {
+    if (match.index > cursor) container.append(document.createTextNode(text.slice(cursor, match.index)));
+    const token = match[0];
+    const isStrong = token.startsWith("**") || token.startsWith("__");
+    const content = token.slice(isStrong ? 2 : 1, isStrong ? -2 : -1);
+    const element = token.startsWith("`") ? document.createElement("code") : document.createElement(isStrong ? "strong" : "em");
+    element.textContent = content;
+    container.append(element);
+    cursor = match.index + token.length;
+  }
+  if (cursor < text.length) container.append(document.createTextNode(text.slice(cursor)));
+}
+
+function renderMarkdown(container, markdown) {
+  container.replaceChildren();
+  const lines = String(markdown).replace(/\r/g, "").split("\n");
+  let list = null;
+  let listType = null;
+  const closeList = () => { list = null; listType = null; };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) { closeList(); continue; }
+    const heading = line.match(/^(#{1,3})\s+(.+)$/);
+    const bullet = line.match(/^[-*+]\s+(.+)$/);
+    const ordered = line.match(/^\d+[.)]\s+(.+)$/);
+    if (heading) {
+      closeList();
+      const element = document.createElement(`h${Math.min(heading[1].length + 3, 6)}`);
+      appendInlineMarkdown(element, heading[2]);
+      container.append(element);
+      continue;
+    }
+    if (bullet || ordered) {
+      const nextListType = ordered ? "ol" : "ul";
+      if (!list || listType !== nextListType) {
+        list = document.createElement(nextListType);
+        listType = nextListType;
+        container.append(list);
+      }
+      const item = document.createElement("li");
+      appendInlineMarkdown(item, (bullet || ordered)[1]);
+      list.append(item);
+      continue;
+    }
+    closeList();
+    const paragraph = document.createElement("p");
+    appendInlineMarkdown(paragraph, line);
+    container.append(paragraph);
+  }
 }
 
 function extractDynamicsTopics(summary) {

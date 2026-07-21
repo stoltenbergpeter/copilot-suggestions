@@ -39,6 +39,7 @@ h3 { margin-bottom: 0; color: var(--ft-blue-5); font-size: .98rem; line-height: 
 .summary-heading .eyebrow { color: var(--ft-blue); }
 .summary-status { border-radius: 999px; background: var(--ft-teal); color: #fff; font-size: .68rem; font-weight: 700; padding: 5px 8px; }
 .summary-text { margin: 12px 0 14px; color: var(--ft-gray); font-size: .92rem; line-height: 1.58; }
+.summary-text > :first-child { margin-top: 0; }.summary-text > :last-child { margin-bottom: 0; }.summary-text p { margin: 0 0 9px; }.summary-text h4, .summary-text h5, .summary-text h6 { margin: 13px 0 5px; color: var(--ft-blue-5); font-size: .84rem; }.summary-text ul, .summary-text ol { margin: 5px 0 10px; padding-left: 20px; }.summary-text li + li { margin-top: 3px; }.summary-text code { border-radius: 2px; background: var(--ft-gray-1); color: var(--ft-blue-5); font-family: Consolas, monospace; font-size: .84em; padding: 1px 4px; }
 .tags-panel { margin: 0 0 14px; border-left: 3px solid var(--ft-teal); background: rgba(217, 244, 242, .56); padding: 10px 12px; }
 .tags-panel .eyebrow { margin-bottom: 7px; color: var(--ft-teal-4); }
 .tag-list { display: flex; flex-wrap: wrap; gap: 6px; }

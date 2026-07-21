@@ -18,6 +18,28 @@
       </div>
 
       <section class="conversation-card" aria-label="Live customer conversation">
+        <section id="summary-panel" class="summary-panel" aria-labelledby="summary-heading" hidden>
+          <div class="summary-heading">
+            <div>
+              <p class="eyebrow">Conversation summary</p>
+              <h3 id="summary-heading">Ready for review</h3>
+            </div>
+            <span class="summary-status">Generated</span>
+          </div>
+          <div id="summary-text" class="summary-text"></div>
+          <section id="tags-panel" class="tags-panel" aria-labelledby="tags-heading" hidden>
+            <p class="eyebrow" id="tags-heading">Recommended tags</p>
+            <div id="tag-list" class="tag-list"></div>
+          </section>
+          <div class="summary-feedback">
+            <span>Was this summary helpful?</span>
+            <div class="summary-actions">
+              <button id="summary-like" class="thumb-button" type="button" aria-pressed="false" aria-label="Mark summary as helpful">&#128077; <span>Helpful</span></button>
+              <button id="sync-summary" class="sync-button" type="button">Sync to activity</button>
+            </div>
+          </div>
+        </section>
+
         <section id="intent-panel" class="intent-panel" aria-live="polite" hidden>
           <div class="intent-icon" aria-hidden="true">&#10022;</div>
           <div class="intent-copy">
@@ -44,11 +66,7 @@
               <input id="task-due-date" name="dueDate" type="date" required>
             </label>
             <label class="field">Priority
-              <select id="task-priority" name="priority">
-                <option>Normal</option>
-                <option>High</option>
-                <option>Low</option>
-              </select>
+              <select id="task-priority" name="priority"><option>Normal</option><option>High</option><option>Low</option></select>
             </label>
             <label class="field field-wide">Owner
               <input id="task-owner" name="owner" type="text" placeholder="Assign an owner">
@@ -56,52 +74,19 @@
             <label class="field field-wide">Notes
               <textarea id="task-notes" name="notes" rows="3" placeholder="Add context for the follow-up..."></textarea>
             </label>
-            <div class="task-details">
-              <span>Intent: <strong id="task-intent"></strong></span>
-              <span>Conversation: <strong id="task-conversation"></strong></span>
-            </div>
-            <div class="task-actions">
-              <button id="cancel-task" class="secondary-button" type="button">Cancel</button>
-              <button class="sync-button" type="submit">Create follow-up task</button>
-            </div>
+            <div class="task-details"><span>Intent: <strong id="task-intent"></strong></span><span>Conversation: <strong id="task-conversation"></strong></span></div>
+            <div class="task-actions"><button id="cancel-task" class="secondary-button" type="button">Cancel</button><button class="sync-button" type="submit">Create follow-up task</button></div>
           </form>
         </section>
 
         <div id="transcript" class="transcript" aria-live="polite" aria-label="Conversation transcript"></div>
 
         <section class="notes-panel" aria-labelledby="notes-heading">
-          <div class="notes-heading">
-            <h3 id="notes-heading">Notes</h3>
-            <span>Saved locally</span>
-          </div>
+          <div class="notes-heading"><h3 id="notes-heading">Notes</h3><span>Saved locally</span></div>
           <div id="notes-editor" class="notes-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Conversation notes" data-placeholder="Add notes for this conversation..."></div>
         </section>
 
-        <section id="summary-panel" class="summary-panel" aria-labelledby="summary-heading" hidden>
-          <div class="summary-heading">
-            <div>
-              <p class="eyebrow">Conversation summary</p>
-              <h3 id="summary-heading">Ready for review</h3>
-            </div>
-            <span class="summary-status">Generated</span>
-          </div>
-          <p id="summary-text" class="summary-text"></p>
-          <section id="tags-panel" class="tags-panel" aria-labelledby="tags-heading" hidden>
-            <p class="eyebrow" id="tags-heading">Recommended tags</p>
-            <div id="tag-list" class="tag-list"></div>
-          </section>
-          <div class="summary-feedback">
-            <span>Was this summary helpful?</span>
-            <div class="summary-actions">
-              <button id="summary-like" class="thumb-button" type="button" aria-pressed="false" aria-label="Mark summary as helpful">&#128077; <span>Helpful</span></button>
-              <button id="sync-summary" class="sync-button" type="button">Sync to activity</button>
-            </div>
-          </div>
-        </section>
-
-        <footer class="conversation-footer">
-          <span id="message-count">0 messages</span>
-        </footer>
+        <footer class="conversation-footer"><span id="message-count">0 messages</span></footer>
       </section>
     </main>
   </body>
