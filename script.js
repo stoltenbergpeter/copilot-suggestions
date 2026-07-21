@@ -26,11 +26,16 @@ const connectionStatus = document.querySelector("#connection-status");
 const connectionLabel = document.querySelector("#connection-label");
 
 const url = new URL(window.location.href);
+const defaultGenesysRegion = "usw2.pure.cloud";
+const defaultGenesysClientId = "409225b8-66a3-407c-92ad-fa386bad3e79";
 const genesysConfig = {
-  region: normalizeRegion(url.searchParams.get("gc_region") || sessionStorage.getItem("gc_region")),
-  clientId: url.searchParams.get("gc_clientId") || sessionStorage.getItem("gc_clientId"),
+  region: normalizeRegion(url.searchParams.get("gc_region") || sessionStorage.getItem("gc_region") || defaultGenesysRegion),
+  clientId: url.searchParams.get("gc_clientId") || sessionStorage.getItem("gc_clientId") || defaultGenesysClientId,
   redirectUrl: url.searchParams.get("gc_redirectUrl") || sessionStorage.getItem("gc_redirectUrl") || `${window.location.origin}${window.location.pathname}`
 };
+if (genesysConfig.region) sessionStorage.setItem("gc_region", genesysConfig.region);
+if (genesysConfig.clientId) sessionStorage.setItem("gc_clientId", genesysConfig.clientId);
+if (genesysConfig.redirectUrl) sessionStorage.setItem("gc_redirectUrl", genesysConfig.redirectUrl);
 const transcriptsByConversation = new Map();
 const subscribedTopics = new Set();
 let activeConversationId = null;
@@ -47,6 +52,14 @@ function normalizeRegion(region) {
 function setConnectionState(state, label) {
   connectionStatus.className = `connection-status ${state}`;
   connectionLabel.textContent = label;
+}
+
+function removeOAuthCallbackParameters() {
+  if (!url.searchParams.has("code")) return;
+  const cleanUrl = new URL(window.location.href);
+  cleanUrl.searchParams.delete("code");
+  cleanUrl.searchParams.delete("state");
+  window.history.replaceState({}, document.title, `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`);
 }
 
 function isAgentChannel(channel) {
@@ -294,6 +307,7 @@ async function connectToGenesys() {
     apiClient.setEnvironment(genesysConfig.region);
     apiClient.setPersistSettings(true, "_copilot_monitor_");
     await apiClient.loginPKCEGrant(genesysConfig.clientId, genesysConfig.redirectUrl, {});
+    removeOAuthCallbackParameters();
     usersApi = new platformClient.UsersApi();
     notificationApi = new platformClient.NotificationsApi();
     const user = await usersApi.getUsersMe({});
